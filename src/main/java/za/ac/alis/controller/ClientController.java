@@ -5,7 +5,7 @@ import za.ac.alis.entities.Client;
 import za.ac.alis.service.ClientService;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.*;
+
 
 @RestController
 @RequestMapping("/api/Client")
@@ -25,8 +25,16 @@ public class ClientController {
         return service.getAllClients();
     }
 
-    @GetMapping("/{email}")
+    @GetMapping("/email/{email}")
     public Client getByEmail(@PathVariable String email) {
         return service.getClientByEmail(email);
+    }
+    @PutMapping("/update/{id}")
+    public Client updateClient(@PathVariable Long id, @RequestBody Client client) {
+    return service.updateClient(id, client);
+    }
+    @DeleteMapping("/delete/{id}")
+    public void deleteClient(@PathVariable Long id) {
+        service.deleteClient(id);
     }
 }

@@ -11,19 +11,25 @@ public class Client {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long userId;
 
+    @Column(unique = true, updatable = false)
+    private String username;
+
+    @Column(nullable = false)
     private String fullName;
 
     @Column(unique = true, nullable = false)
     private String email;
 
+    @Column(nullable = false)
     private String passwordHash;
 
     private String role = "user";
 
+    @Column(updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
     // getters and setters
-
+    public Client() {}
     public Long getUserId() { return userId; }
 
     public void setUserId(Long userId) { this.userId = userId; }
@@ -45,4 +51,9 @@ public class Client {
     public void setRole(String role) { this.role = role; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
-}
+    public void setUsername(String username) { this.username = username; }
+    public String getUsername() {
+        return username;
+    }
+     
+    }
