@@ -1,76 +1,129 @@
 package za.ac.alis.service;
 
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import za.ac.alis.entities.Client;
+import za.ac.alis.entities.DealMaker;
+import za.ac.alis.entities.LegalPractitioner;
+import za.ac.alis.enums.ActionType;
+import za.ac.alis.enums.Role;
 import za.ac.alis.repo.ClientRepository;
-import org.springframework.stereotype.Service;
 
-
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
-public class ClientService implements ClientServiceINT {
+@Transactional
+public class ClientService {
 
-    @Autowired
-    private ClientRepository repository;
+    private final ClientRepository clientRepository;
+    private final AuditLogService auditLogService;
+    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
-    @Override
-    public Client createClient(Client client) {
-
-         // 🔥 generate username first
-        String username = generateUniqueUsername(client.getFullName());
-
-        client.setUsername(username);
-
-        return repository.save(client);
+    public ClientService(ClientRepository clientRepository, AuditLogService auditLogService) {
+        this.clientRepository = clientRepository;
+        this.auditLogService = auditLogService;
     }
-    @Override
+
+    // -------------------- Registration (overloaded) --------------------
+    public Client registerClient(String fullName, String email, String password) {
+        if (clientRepository.existsByEmail(email)) {
+            throw new RuntimeException("Email already exists");
+        }
+        Client client = new Client();
+        client.setFullName(fullName);
+        client.setEmail(email);
+        client.setPasswordHash(passwordEncoder.encode(password));
+        client.setRole(Role.USER);
+        client.setUsername(generateUniqueUsername(fullName));
+        client.setCreatedAt(LocalDateTime.now());
+        Client saved = clientRepository.save(client);
+        auditLogService.logClientAction(saved, ActionType.USER_CREATED, "Client registered: " + email, "SYSTEM");
+        return saved;
+    }
+
+    public DealMaker registerDealMaker(String fullName, String email, String password,
+                                       String companyName, String dealSpecialty) {
+        if (clientRepository.existsByEmail(email)) {
+            throw new RuntimeException("Email already exists");
+        }
+        DealMaker dm = new DealMaker();
+        dm.setFullName(fullName);
+        dm.setEmail(email);
+        dm.setPasswordHash(passwordEncoder.encode(password));
+        dm.setRole(Role.DEAL_MAKER);
+        dm.setUsername(generateUniqueUsername(fullName));
+        dm.setCreatedAt(LocalDateTime.now());
+        dm.setCompanyName(companyName);
+        dm.setDealSpecialty(dealSpecialty);
+        DealMaker saved = clientRepository.save(dm);
+        auditLogService.logClientAction(saved, ActionType.USER_CREATED, "DealMaker registered: " + email, "SYSTEM");
+        return saved;
+    }
+
+    public LegalPractitioner registerLegalPractitioner(String fullName, String email, String password,
+                                                       String barNumber, String lawFirm) {
+        if (clientRepository.existsByEmail(email)) {
+            throw new RuntimeException("Email already exists");
+        }
+        LegalPractitioner lp = new LegalPractitioner();
+        lp.setFullName(fullName);
+        lp.setEmail(email);
+        lp.setPasswordHash(passwordEncoder.encode(password));
+        lp.setRole(Role.LEGAL_PRACTITIONER);
+        lp.setUsername(generateUniqueUsername(fullName));
+        lp.setCreatedAt(LocalDateTime.now());
+        lp.setBarNumber(barNumber);
+        lp.setLawFirm(lawFirm);
+        LegalPractitioner saved = clientRepository.save(lp);
+        auditLogService.logClientAction(saved, ActionType.USER_CREATED, "Legal Practitioner registered: " + email, "SYSTEM");
+        return saved;
+    }
+
+    // -------------------- Login --------------------
+    public Client login(String email, String rawPassword) {
+        Client client = clientRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Invalid credentials"));
+        if (!passwordEncoder.matches(rawPassword, client.getPasswordHash())) {
+            auditLogService.logClientAction(client, ActionType.LOGIN, "Failed login attempt for: " + email, "SYSTEM");
+            throw new RuntimeException("Invalid credentials");
+        }
+        auditLogService.logClientAction(client, ActionType.LOGIN, "Successful login: " + email, "SYSTEM");
+        return client;
+    }
+
+    // -------------------- CRUD --------------------
     public List<Client> getAllClients() {
-        return repository.findAll();
-    }
-    @Override
-    public Client getClientByEmail(String email) {
-    return repository.findByEmail(email)
-            .orElseThrow(() -> new RuntimeException("Client not found"));
+        return clientRepository.findAll();
     }
 
-    @Override   
-    public Client updateClient(Long id, Client updatedClient) {
-    Client existing = repository.findById(id)
-            .orElseThrow(() -> new RuntimeException("Client not found"));
-
-    existing.setFullName(updatedClient.getFullName());
-    existing.setEmail(updatedClient.getEmail());
-    existing.setPasswordHash(updatedClient.getPasswordHash());
-    existing.setRole(updatedClient.getRole());
-    // add other fields
-
-    return repository.save(existing);
+    public Client getClientById(Long id) {
+        return clientRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Client not found"));
     }
-    @Override
+
+    public Client updateClient(Long id, Client updated) {
+        Client existing = getClientById(id);
+        existing.setFullName(updated.getFullName());
+        existing.setEmail(updated.getEmail());
+        existing.setUsername(updated.getUsername());
+        // Do not update password here unless explicitly intended
+        return clientRepository.save(existing);
+    }
+
     public void deleteClient(Long id) {
-    if (!repository.existsById(id)) {
-        throw new RuntimeException("Client not found");
+        clientRepository.deleteById(id);
     }
-    repository.deleteById(id);
-    }
-    @Override
-    public Client getClientByUsername(String username) {
-    return repository.findByUsername(username)
-            .orElseThrow(() -> new RuntimeException("Client not found"));
-    }
-    @Override
-    public String generateUniqueUsername(String fullName) {
 
-    String base = fullName.toLowerCase().replaceAll(" ", "");
-    String username;
-    
-    do {
-        int randomNum = (int)(Math.random() * 10000);
-        username = base + "_" + randomNum;
-    } while (repository.existsByUsername(username));
-
-    return username;
-}
+    // -------------------- Helper --------------------
+    private String generateUniqueUsername(String fullName) {
+        String base = fullName.toLowerCase().replaceAll("\\s+", "");
+        String username;
+        do {
+            int random = (int) (Math.random() * 10000);
+            username = base + "_" + random;
+        } while (clientRepository.existsByUsername(username));
+        return username;
+    }
 }
