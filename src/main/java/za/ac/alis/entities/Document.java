@@ -34,11 +34,12 @@ public class Document {
     private LocalDateTime archivedAt;
 
     // ====================== STORAGE REFERENCES ======================
-    @Column(name = "file_path", nullable = false)
-    private String filePath;           // Unique internal filename (e.g. doc_uuid_1712345678.pdf)
+   @Column(name = "file_path")   // Remove nullable = false
+    private String filePath;        // Unique internal filename (e.g. doc_uuid_1712345678.pdf)
 
    
-    private String fileUrl;            // Public URL from Supabase/Firebase
+    @Column(name = "file_url", columnDefinition = "TEXT")
+    private String fileUrl;           // Public URL from Supabase/Firebase
 
     @Column(name = "extracted_text_url")
     private String extractedTextUrl;

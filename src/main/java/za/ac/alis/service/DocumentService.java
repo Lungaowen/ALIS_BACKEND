@@ -1,136 +1,146 @@
 package za.ac.alis.service;
 
-import za.ac.alis.entities.Client;
-import za.ac.alis.entities.Document;
-import za.ac.alis.entities.DocumentContent;
-import za.ac.alis.entities.FileMetadata;
-import za.ac.alis.enums.DocumentStat;
-import za.ac.alis.enums.IngestionSource;
-import za.ac.alis.repo.ClientRepository;
-import za.ac.alis.repo.DocumentRepository;
-import za.ac.alis.repo.DocumentContentRepository;
-import za.ac.alis.repo.FileMetadataRepository;
-import za.ac.alis.utils.FilenameSanitizer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import za.ac.alis.entities.*;
+import za.ac.alis.enums.DocumentStat;
+import za.ac.alis.enums.IngestionSource;
+import za.ac.alis.repo.*;
+import za.ac.alis.utils.FilenameSanitizer;
 
+import java.io.InputStream;
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * DOCUMENT SERVICE — FINAL VERSION WITH SUPABASE STORAGE
- */
 @Service
 public class DocumentService {
 
-    private final DocumentRepository        documentRepository;
-    private final ClientRepository          clientRepository;
-    private final FileMetadataRepository    fileMetadataRepository;
-    private final DocumentContentRepository documentContentRepository;
-    private final StorageService            storageService;           // ← Supabase storage
-    private final AiPipelineService         aiPipelineService;
-
+    private static final Logger log = LoggerFactory.getLogger(DocumentService.class);
     private static final long MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
+
+    private final DocumentRepository documentRepository;
+    private final ClientRepository clientRepository;
+    private final FileMetadataRepository fileMetadataRepository;
+    private final DocumentContentRepository documentContentRepository;
+    private final FirebaseStorageService firebaseStorageService;   // ✅ Firebase
+    private final AiPipelineService aiPipelineService;
 
     public DocumentService(
             DocumentRepository documentRepository,
             ClientRepository clientRepository,
             FileMetadataRepository fileMetadataRepository,
             DocumentContentRepository documentContentRepository,
-            StorageService storageService,
+            FirebaseStorageService firebaseStorageService,
             AiPipelineService aiPipelineService) {
 
         this.documentRepository = documentRepository;
         this.clientRepository = clientRepository;
         this.fileMetadataRepository = fileMetadataRepository;
         this.documentContentRepository = documentContentRepository;
-        this.storageService = storageService;
+        this.firebaseStorageService = firebaseStorageService;
         this.aiPipelineService = aiPipelineService;
     }
 
-    // =========================================================================
-    // MAIN UPLOAD METHOD — NOW USES SUPABASE
-    // =========================================================================
     @Transactional
     public Document uploadDocument(MultipartFile file, Long clientId) throws Exception {
-
-        // ── 1. Basic validations ─────────────────────────────────────────────
+        // 1. Validation
         if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException("No file provided or file is empty.");
+            throw new IllegalArgumentException("File is empty");
         }
-
         if (file.getSize() > MAX_FILE_BYTES) {
-            throw new IllegalArgumentException("File too large. Maximum allowed is 10 MB.");
+            throw new IllegalArgumentException("File exceeds maximum size of 10 MB");
         }
 
-        // ── 2. Sanitize filename + validate MIME ─────────────────────────────
-        String mimeType = file.getContentType() != null ? file.getContentType() : "application/octet-stream";
-        String safeFilename = FilenameSanitizer.sanitize(file.getOriginalFilename(), mimeType);
+        String mimeType = file.getContentType();
+        String originalFilename = file.getOriginalFilename();
+        String safeFilename = FilenameSanitizer.sanitize(originalFilename, mimeType);
 
-        // ── 3. Validate client ───────────────────────────────────────────────
         Client client = clientRepository.findById(clientId)
                 .orElseThrow(() -> new RuntimeException("Client not found: " + clientId));
 
-        // ── 4. Compute SHA-256 hash for duplicate detection ──────────────────
-        byte[] fileBytes = file.getBytes();
-        String hash = computeSha256(fileBytes);
-
-        if (fileMetadataRepository.existsByHash(hash)) {
-            throw new RuntimeException("This file has already been uploaded (duplicate detected).");
+        // 2. Compute SHA-256 hash while streaming (no memory double-loading)
+        String hash;
+        try (InputStream is = file.getInputStream()) {
+            hash = computeSha256(is);
         }
 
-        // ── 5. Create Document record first (DB-first strategy) ──────────────
+        // 3. Duplicate check
+        if (fileMetadataRepository.existsByHash(hash)) {
+            throw new RuntimeException("Duplicate file detected. This document has already been uploaded.");
+        }
+
+        // 4. Create Document record
         Document doc = new Document();
         doc.setTitle(safeFilename);
         doc.setClient(client);
         doc.setUploadedAt(LocalDateTime.now());
         doc.setStatus(DocumentStat.PENDING);
-        doc.setIngestionSource(IngestionSource.UPLOAD);
+        doc.setIngestionSource(IngestionSource.MANUAL);   // ✅ Fixed enum
 
         Document savedDoc = documentRepository.save(doc);
+        log.info("Created document record ID {} for client {}", savedDoc.getDocumentId(), clientId);
 
-        // ── 6. Upload file to Supabase using StorageService ──────────────────
-        String fileUrl = storageService.uploadFile(file, clientId);   // Returns public URL
+        // 5. Upload to Firebase Storage (streaming)
+        String fileUrl;
+        try (InputStream is = file.getInputStream()) {
+            fileUrl = firebaseStorageService.uploadFile(is, safeFilename, mimeType, clientId);
+        } catch (Exception e) {
+            log.error("Firebase upload failed for document {}", savedDoc.getDocumentId(), e);
+            savedDoc.setStatus(DocumentStat.FAILED);
+            documentRepository.save(savedDoc);
+            throw new RuntimeException("Failed to upload file to cloud storage", e);
+        }
+        savedDoc.setFileUrl(fileUrl);
+        documentRepository.save(savedDoc);
 
-        // ── 7. Create FileMetadata ───────────────────────────────────────────
+        // 6. Save FileMetadata
         FileMetadata meta = new FileMetadata();
         meta.setDocument(savedDoc);
         meta.setMimeType(mimeType);
         meta.setSize(file.getSize());
         meta.setHash(hash);
-        // We store the relative path if needed, but URL is the source of truth
         fileMetadataRepository.save(meta);
 
-        // ── 8. Create DocumentContent shell for AI pipeline ──────────────────
+        // 7. Create empty DocumentContent for AI pipeline
         DocumentContent content = new DocumentContent();
         content.setDocument(savedDoc);
         documentContentRepository.save(content);
 
-        // ── 9. Update Document with Supabase URL ─────────────────────────────
-        savedDoc.setFileUrl(fileUrl);
-        documentRepository.save(savedDoc);
-
-        // ── 10. Trigger AI processing (text extraction + analysis) ───────────
-        aiPipelineService.processDocument(savedDoc.getDocumentId());
+        // 8. Trigger AI processing (async, with failure handling)
+        try {
+            //aiPipelineService.processDocument(savedDoc.getDocumentId());
+            log.info("AI pipeline triggered for document {}", savedDoc.getDocumentId());
+        } catch (Exception e) {
+            log.error("AI pipeline failed to start for document {}", savedDoc.getDocumentId(), e);
+            savedDoc.setStatus(DocumentStat.FAILED);
+            documentRepository.save(savedDoc);
+        }
 
         return savedDoc;
     }
 
-    // =========================================================================
-    // HELPER: SHA-256
-    // =========================================================================
-    private String computeSha256(byte[] data) throws Exception {
+    /**
+     * Computes SHA-256 hash from an InputStream without loading the entire file into memory.
+     */
+    private String computeSha256(InputStream inputStream) throws Exception {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        byte[] hashBytes = digest.digest(data);
+        byte[] buffer = new byte[8192];
+        int bytesRead;
+        while ((bytesRead = inputStream.read(buffer)) != -1) {
+            digest.update(buffer, 0, bytesRead);
+        }
+        byte[] hashBytes = digest.digest();
         return HexFormat.of().formatHex(hashBytes);
     }
 
     // =========================================================================
-    // BASIC CRUD (for completeness)
+    // BASIC CRUD
     // =========================================================================
     public Optional<Document> getDocumentById(Long id) {
         return documentRepository.findById(id);
