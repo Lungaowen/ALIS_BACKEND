@@ -28,7 +28,7 @@ public class DocumentService {
     private final ClientRepository clientRepository;
     private final FileMetadataRepository fileMetadataRepository;
     private final DocumentContentRepository documentContentRepository;
-    private final FirebaseStorageService firebaseStorageService;   // ✅ Firebase
+    private final FirebaseStorageService firebaseStorageService;
     private final AiPipelineService aiPipelineService;
 
     public DocumentService(
@@ -49,7 +49,6 @@ public class DocumentService {
 
     @Transactional
     public Document uploadDocument(MultipartFile file, Long clientId) throws Exception {
-        // 1. Validation
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("File is empty");
         }
@@ -64,24 +63,21 @@ public class DocumentService {
         Client client = clientRepository.findById(clientId)
                 .orElseThrow(() -> new RuntimeException("Client not found: " + clientId));
 
-        // 2. Compute SHA-256 hash while streaming (no memory double-loading)
         String hash;
         try (InputStream is = file.getInputStream()) {
             hash = computeSha256(is);
         }
 
-        // 3. Duplicate check
         if (fileMetadataRepository.existsByHash(hash)) {
             throw new RuntimeException("Duplicate file detected. This document has already been uploaded.");
         }
 
-        // 4. Create Document record
         Document doc = new Document();
         doc.setTitle(safeFilename);
         doc.setClient(client);
         doc.setUploadedAt(LocalDateTime.now());
         doc.setStatus(DocumentStat.PENDING);
-        doc.setIngestionSource(IngestionSource.MANUAL);   // ✅ Fixed enum
+        doc.setIngestionSource(IngestionSource.MANUAL);
 
         Document savedDoc = documentRepository.save(doc);
         log.info("Created document record ID {} for client {}", savedDoc.getDocumentId(), clientId);
@@ -97,9 +93,11 @@ public class DocumentService {
             throw new RuntimeException("Failed to upload file to cloud storage", e);
         }
         savedDoc.setFileUrl(fileUrl);
+        // ✅ Store the Firebase object path for later download
+        String firebasePath = "documents/client_" + clientId + "/" + safeFilename;
+        savedDoc.setFilePath(firebasePath);
         documentRepository.save(savedDoc);
 
-        // 6. Save FileMetadata
         FileMetadata meta = new FileMetadata();
         meta.setDocument(savedDoc);
         meta.setMimeType(mimeType);
@@ -107,15 +105,13 @@ public class DocumentService {
         meta.setHash(hash);
         fileMetadataRepository.save(meta);
 
-        // 7. Create empty DocumentContent for AI pipeline
         DocumentContent content = new DocumentContent();
         content.setDocument(savedDoc);
         documentContentRepository.save(content);
 
-        // 8. Trigger AI processing (async, with failure handling)
         try {
-            //aiPipelineService.processDocument(savedDoc.getDocumentId());
-            log.info("AI pipeline triggered for document {}", savedDoc.getDocumentId());
+            // aiPipelineService.processDocument(savedDoc.getDocumentId()); // temporarily disabled
+            log.info("Document {} stored without AI analysis", savedDoc.getDocumentId());
         } catch (Exception e) {
             log.error("AI pipeline failed to start for document {}", savedDoc.getDocumentId(), e);
             savedDoc.setStatus(DocumentStat.FAILED);
@@ -125,9 +121,6 @@ public class DocumentService {
         return savedDoc;
     }
 
-    /**
-     * Computes SHA-256 hash from an InputStream without loading the entire file into memory.
-     */
     private String computeSha256(InputStream inputStream) throws Exception {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         byte[] buffer = new byte[8192];
@@ -139,9 +132,6 @@ public class DocumentService {
         return HexFormat.of().formatHex(hashBytes);
     }
 
-    // =========================================================================
-    // BASIC CRUD
-    // =========================================================================
     public Optional<Document> getDocumentById(Long id) {
         return documentRepository.findById(id);
     }
@@ -156,6 +146,14 @@ public class DocumentService {
 
     @Transactional
     public void deleteDocument(Long id) {
-        documentRepository.deleteById(id);
+    Document doc = documentRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("Document not found"));
+
+    // Delete from Firebase first (optional: if this fails, DB record still exists)
+    if (doc.getFilePath() != null && !doc.getFilePath().isBlank()) {
+        firebaseStorageService.deleteFileByPath(doc.getFilePath());
     }
+
+    documentRepository.delete(doc);
+}
 }

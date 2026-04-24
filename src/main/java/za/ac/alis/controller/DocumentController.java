@@ -1,6 +1,8 @@
 package za.ac.alis.controller;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -11,7 +13,9 @@ import za.ac.alis.entities.Document;
 import za.ac.alis.enums.ActionType;
 import za.ac.alis.service.AuditLogService;
 import za.ac.alis.service.DocumentService;
+import za.ac.alis.service.FirebaseStorageService;
 
+import java.io.IOException;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
@@ -22,14 +26,16 @@ public class DocumentController {
 
     private final DocumentService documentService;
     private final AuditLogService auditLogService;
+    private final FirebaseStorageService firebaseStorageService;
 
     public DocumentController(DocumentService documentService,
-                              AuditLogService auditLogService) {
+                              AuditLogService auditLogService,
+                              FirebaseStorageService firebaseStorageService) {
         this.documentService = documentService;
         this.auditLogService = auditLogService;
+        this.firebaseStorageService = firebaseStorageService;
     }
 
-    // POST /api/documents/upload
     @PostMapping("/upload")
     public ResponseEntity<Map<String, Object>> uploadDocument(
             @RequestParam("file")     MultipartFile file,
@@ -55,7 +61,6 @@ public class DocumentController {
         ));
     }
 
-    // GET /api/documents/{id}
     @GetMapping("/{id}")
     public ResponseEntity<DocumentResponseDTO> getDocumentById(@PathVariable Long id) {
         Document document = documentService.getDocumentById(id)
@@ -64,7 +69,6 @@ public class DocumentController {
         return ResponseEntity.ok(toDTO(document));
     }
 
-    // GET /api/documents/client/{clientId}
     @GetMapping("/client/{clientId}")
     public ResponseEntity<List<DocumentResponseDTO>> getByClient(@PathVariable Long clientId) {
         List<DocumentResponseDTO> docs = documentService.getDocumentsByClientId(clientId)
@@ -74,7 +78,6 @@ public class DocumentController {
         return ResponseEntity.ok(docs);
     }
 
-    // GET /api/documents/all
     @GetMapping("/all")
     public ResponseEntity<List<DocumentResponseDTO>> getAllDocuments() {
         List<DocumentResponseDTO> docs = documentService.getAllDocuments()
@@ -84,11 +87,32 @@ public class DocumentController {
         return ResponseEntity.ok(docs);
     }
 
-    // DELETE /api/documents/{id}
     @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, String>> deleteDocument(@PathVariable Long id) {
         documentService.deleteDocument(id);
         return ResponseEntity.ok(Map.of("message", "Document deleted successfully"));
+    }
+
+    // ── NEW: download endpoint ───────────────────────────────────────────────
+    @GetMapping("/{id}/download")
+    public void downloadDocument(@PathVariable Long id, HttpServletResponse response) throws IOException {
+        Document doc = documentService.getDocumentById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+
+        if (doc.getFilePath() == null || doc.getFilePath().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No file attached to this document");
+        }
+
+        byte[] fileBytes = firebaseStorageService.downloadFile(doc.getFilePath());
+        String fileName = doc.getTitle() != null ? doc.getTitle() : "document_" + id;
+        String mimeType = "application/octet-stream"; // generic; can be refined with doc metadata if needed
+
+        response.setContentType(mimeType);
+        response.setHeader(HttpHeaders.CONTENT_DISPOSITION,
+                "attachment; filename=\"" + fileName + "\"");
+        response.setContentLength(fileBytes.length);
+        response.getOutputStream().write(fileBytes);
+        response.getOutputStream().flush();
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
