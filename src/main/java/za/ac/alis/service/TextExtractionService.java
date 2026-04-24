@@ -66,4 +66,10 @@ public class TextExtractionService {
                 .replaceAll("(\r?\n){3,}", "\n\n")
                 .trim();
     }
+    /**
+ * Convenience method for extracting text from an in‑memory PDF file.
+ */
+    public String extractTextFromPdfBytes(byte[] pdfBytes) throws IOException {
+    return extractFromPdf(pdfBytes);   // uses the existing private method
+    }
 }
