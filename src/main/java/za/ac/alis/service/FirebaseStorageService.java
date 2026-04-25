@@ -1,17 +1,24 @@
 package za.ac.alis.service;
 
-import com.google.cloud.storage.*;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URL;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-import za.ac.alis.utils.FileNameGenerator;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.URL;
-import java.util.concurrent.TimeUnit;
+import com.google.cloud.storage.Blob;
+import com.google.cloud.storage.BlobId;
+import com.google.cloud.storage.BlobInfo;
+import com.google.cloud.storage.Bucket;
+import com.google.cloud.storage.Storage;
+
+import za.ac.alis.utils.FileNameGenerator;
 
 @Service
 public class FirebaseStorageService {
@@ -29,43 +36,41 @@ public class FirebaseStorageService {
         this.storage = bucket.getStorage();
     }
 
-    /**
-     * Upload using byte array (use when you already have the file content in memory).
-     */
+    // Upload using byte array
     public String uploadFile(byte[] content, String fileName, String contentType, Long clientId) throws IOException {
         String path = buildPath(clientId, fileName);
         BlobId blobId = BlobId.of(bucketName, path);
         BlobInfo blobInfo = BlobInfo.newBuilder(blobId)
                 .setContentType(contentType)
+                .setMetadata(Map.of(
+                        "clientId", clientId.toString(),
+                        "uploadedAt", String.valueOf(System.currentTimeMillis())
+                ))
                 .build();
-
         log.info("Uploading file '{}' for client {} to Firebase Storage", fileName, clientId);
         storage.create(blobInfo, content);
         log.info("Upload completed for '{}'", fileName);
-
         return generateSignedUrl(blobInfo);
     }
 
-    /**
-     * Upload using InputStream (preferred for large files to avoid memory overload).
-     */
+    // Upload using InputStream (preferred for large files)
     public String uploadFile(InputStream inputStream, String fileName, String contentType, Long clientId) throws IOException {
         String path = buildPath(clientId, fileName);
         BlobId blobId = BlobId.of(bucketName, path);
         BlobInfo blobInfo = BlobInfo.newBuilder(blobId)
                 .setContentType(contentType)
+                .setMetadata(Map.of(
+                        "clientId", clientId.toString(),
+                        "uploadedAt", String.valueOf(System.currentTimeMillis())
+                ))
                 .build();
-
         log.info("Streaming upload for file '{}' (client {})", fileName, clientId);
         storage.createFrom(blobInfo, inputStream);
         log.info("Streaming upload completed for '{}'", fileName);
-
         return generateSignedUrl(blobInfo);
     }
 
-    /**
-     * Convenience method for MultipartFile – streams directly.
-     */
+    // Convenience method for MultipartFile
     public String uploadFile(MultipartFile file, Long clientId) throws IOException {
         String fileName = FileNameGenerator.generate(file.getOriginalFilename());
         try (InputStream is = file.getInputStream()) {
@@ -73,34 +78,39 @@ public class FirebaseStorageService {
         }
     }
 
-    /**
-     * Delete a file from Firebase Storage.
-     */
-    public boolean deleteFile(String fileUrl) {
-        String base = "https://storage.googleapis.com/" + bucketName + "/";
-        if (!fileUrl.startsWith(base)) {
-            log.warn("Attempted to delete file with non‑standard URL: {}", fileUrl);
-            return false;
+    // Download a file from Firebase Storage by its object path
+    public byte[] downloadFile(String objectPath) throws IOException {
+        BlobId blobId = BlobId.of(bucketName, objectPath);
+        Blob blob = storage.get(blobId);
+        if (blob == null || !blob.exists()) {
+            throw new IOException("File not found in Firebase: " + objectPath);
         }
-        String objectPath = fileUrl.substring(base.length());
+        return blob.getContent();
+    }
+
+    // Delete a file using the stored object path
+    public boolean deleteFileByPath(String objectPath) {
         BlobId blobId = BlobId.of(bucketName, objectPath);
         boolean deleted = storage.delete(blobId);
         if (deleted) {
             log.info("Deleted file from Firebase: {}", objectPath);
         } else {
-            log.warn("Failed to delete file (may not exist): {}", objectPath);
+            log.warn("File not found (or could not delete): {}", objectPath);
         }
         return deleted;
     }
 
+    // Helper to build a storage path
     private String buildPath(Long clientId, String fileName) {
-        return "documents/client_" + clientId + "/" + fileName;
+        String uniqueFileName = System.currentTimeMillis() + "_" + fileName;
+        return "documents/client_" + clientId + "/" + uniqueFileName;
     }
 
+    // Generate a signed URL (24-hour access)
     private String generateSignedUrl(BlobInfo blobInfo) {
         URL signedUrl = storage.signUrl(
                 blobInfo,
-                1, TimeUnit.HOURS,
+                24, TimeUnit.HOURS,
                 Storage.SignUrlOption.withV4Signature()
         );
         return signedUrl.toString();
