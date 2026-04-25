@@ -21,13 +21,13 @@ import java.nio.charset.StandardCharsets;
 @Configuration
 public class FirebaseConfig {
 
-    @Value("${firebase.storage.bucket}")
+    @Value("${FIREBASE_BUCKET_NAME}")
     private String storageBucket;
 
     @Value("${firebase.credentials.path:}")
     private String credentialsPath;
 
-    @Value("${firebase.credentials.json:}")
+    @Value("${FIREBASE_SERVICE_ACCOUNT:}")
     private String credentialsJson;
 
     @PostConstruct
