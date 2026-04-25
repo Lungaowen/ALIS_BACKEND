@@ -4,17 +4,20 @@ public final class AuditLogQueries {
 
     private AuditLogQueries() {}
 
-    // Aliases match AuditLogProjection getter names exactly
+    // LEFT JOIN preserves logs where client / admin / document is null
     public static final String FIND_ALL_LOGS = """
             SELECT a.logId          AS logId,
                    a.actionType     AS actionType,
                    a.description    AS description,
                    a.ipAddress      AS ipAddress,
                    a.createdAt      AS createdAt,
-                   a.client.clientId AS clientId,
-                   a.admin.adminId   AS adminId,
-                   a.document.documentId AS documentId
+                   c.clientId       AS clientId,
+                   ad.adminId       AS adminId,
+                   doc.documentId   AS documentId
             FROM AuditLog a
+            LEFT JOIN a.client   c
+            LEFT JOIN a.admin    ad
+            LEFT JOIN a.document doc
             ORDER BY a.createdAt DESC
             """;
 
@@ -24,10 +27,13 @@ public final class AuditLogQueries {
                    a.description    AS description,
                    a.ipAddress      AS ipAddress,
                    a.createdAt      AS createdAt,
-                   a.client.clientId AS clientId,
-                   a.admin.adminId   AS adminId,
-                   a.document.documentId AS documentId
+                   c.clientId       AS clientId,
+                   ad.adminId       AS adminId,
+                   doc.documentId   AS documentId
             FROM AuditLog a
+            LEFT JOIN a.client   c
+            LEFT JOIN a.admin    ad
+            LEFT JOIN a.document doc
             ORDER BY a.createdAt DESC
             """;
 
@@ -37,11 +43,14 @@ public final class AuditLogQueries {
                    a.description    AS description,
                    a.ipAddress      AS ipAddress,
                    a.createdAt      AS createdAt,
-                   a.client.clientId AS clientId,
-                   a.admin.adminId   AS adminId,
-                   a.document.documentId AS documentId
+                   c.clientId       AS clientId,
+                   ad.adminId       AS adminId,
+                   doc.documentId   AS documentId
             FROM AuditLog a
-            WHERE a.client.clientId = :clientId
+            LEFT JOIN a.client   c
+            LEFT JOIN a.admin    ad
+            LEFT JOIN a.document doc
+            WHERE c.clientId = :clientId
             ORDER BY a.createdAt DESC
             """;
 }
