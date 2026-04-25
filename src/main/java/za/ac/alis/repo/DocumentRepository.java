@@ -38,6 +38,20 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
     @Query("SELECT COUNT(DISTINCT d.client.clientId) FROM Document d")
     long countDistinctClientIds();
 
-    @Query("SELECT d FROM Document d JOIN FETCH d.client WHERE d.client.clientId = :clientId ORDER BY d.uploadedAt DESC")
+    @Query("""
+            SELECT d.documentId      AS documentId,
+                   d.title           AS title,
+                   d.status          AS status,
+                   d.ingestionSource AS ingestionSource,
+                   d.uploadedAt      AS uploadedAt,
+                   d.filePath        AS filePath,
+                   d.fileUrl         AS fileUrl,
+                   c.clientId        AS clientId,
+                   c.fullName        AS clientName
+            FROM Document d
+            JOIN d.client c
+            WHERE d.client.clientId = :clientId
+            ORDER BY d.uploadedAt DESC
+            """)
     List<DocumentInfoProjection> findRecentDocumentsByClientId(@Param("clientId") Long clientId);
 }
