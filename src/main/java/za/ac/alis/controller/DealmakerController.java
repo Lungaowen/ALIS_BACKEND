@@ -1,25 +1,30 @@
 package za.ac.alis.controller;
 
+import java.util.List;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+
 import za.ac.alis.dto.DealMakerDTO;
-import za.ac.alis.dto.RegisterRequest;
 import za.ac.alis.entities.DealMaker;
 import za.ac.alis.repo.DealMakerRepository;
 import za.ac.alis.service.ClientService;
 
-import java.util.List;
-
 @RestController
 @RequestMapping("/api/dealmakers")
-public class DealMakerController {
+public class DealmakerController {
 
     private final DealMakerRepository dealMakerRepository;
     private final ClientService       clientService;
 
-    public DealMakerController(DealMakerRepository dealMakerRepository,
+    public DealmakerController(DealMakerRepository dealMakerRepository,
                                 ClientService clientService) {
         this.dealMakerRepository = dealMakerRepository;
         this.clientService       = clientService;
