@@ -1,0 +1,23 @@
+# Sensitive files
+application.properties
+firebase-service-account.json
+*.log
+*.env
+
+# Build artifacts
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db

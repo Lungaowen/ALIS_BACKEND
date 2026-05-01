@@ -1,0 +1,62 @@
+services:
+  - type: web
+    name: alis-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter          # upgrade to standard for production load
+    region: frankfurt      # closest to ZA; switch to oregon if your users are US-based
+
+    # Render injects PORT automatically — the app reads it via ${PORT:8081}
+    # Do NOT hardcode a port here.
+
+    healthCheckPath: /health
+
+    envVars:
+      # ── Spring profile ──────────────────────────────────────────────
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod            # disables EnvConfig (.env loader) on Render
+
+      # ── Database (Supabase) ─────────────────────────────────────────
+      - key: DB_URL
+        sync: false            # set manually in Render dashboard
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+
+      # ── Firebase ────────────────────────────────────────────────────
+      # Option A: paste the full JSON as an env var (simpler)
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false
+      # Option B: upload firebase.json as a Render Secret File at /etc/secrets/firebase.json
+      #           and leave FIREBASE_SERVICE_ACCOUNT blank — FirebaseConfig checks that path first.
+      - key: FIREBASE_BUCKET_NAME
+        sync: false
+
+      # ── AI ──────────────────────────────────────────────────────────
+      - key: GROQ_API_KEY
+        sync: false
+
+      # ── Security ────────────────────────────────────────────────────
+      - key: ALIS_JWT_SECRET
+        sync: false
+      - key: ALIS_JWT_EXPIRATION
+        value: "86400000"      # 24 h in ms; override if needed
+
+      # ── Admin seed ──────────────────────────────────────────────────
+      - key: ALIS_SEED_ADMIN_EMAIL
+        sync: false
+      - key: ALIS_SEED_ADMIN_PASSWORD
+        sync: false
+      - key: ALIS_SEED_ADMIN_NAME
+        value: "System Admin"
+
+      # ── CORS — replace with your real frontend URL ──────────────────
+      - key: ALIS_CORS_ALLOWED_ORIGIN_PATTERNS
+        value: "https://your-frontend.vercel.app"   # CHANGE THIS
+
+      # ── JPA ─────────────────────────────────────────────────────────
+      - key: DDL_MODE
+        value: update          # switch to validate once schema is stable
+      - key: JPA_SHOW_SQL
+        value: "false"
