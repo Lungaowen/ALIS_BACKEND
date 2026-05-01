@@ -53,7 +53,7 @@ public class AIAnalysisService {
     private final HttpClient   http;
     private final ObjectMapper mapper;
 
-    public AIAnalysisService(@Value("${alis.ai.groq.key}") String groqApiKey) {
+    public AIAnalysisService(@Value("${alis.ai.groq.key:}") String groqApiKey) {
         this.groqApiKey = groqApiKey;
         this.http   = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(30))
