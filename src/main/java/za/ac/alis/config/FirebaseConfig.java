@@ -42,6 +42,10 @@ public class FirebaseConfig {
             return;
         }
 
+        if (storageBucket == null || storageBucket.isBlank()) {
+            throw new IllegalStateException("Firebase bucket name not configured. Set FIREBASE_BUCKET_NAME.");
+        }
+
         InputStream serviceAccountStream = null;
         File secretFile = new File("/etc/secrets/firebase.json");
 
