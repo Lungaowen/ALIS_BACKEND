@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,4 +57,32 @@ public interface SummaryReportRepository extends JpaRepository<SummaryReport, Lo
     @Transactional
     @Query("DELETE FROM SummaryReport r WHERE r.document.documentId = :documentId")
     void deleteByDocument_DocumentId(Long documentId);
+
+   
+
+
+    @Transactional(readOnly = true)   // ← Add this
+    @Query("""
+        SELECT r FROM SummaryReport r
+        JOIN FETCH r.document d
+        JOIN FETCH d.client c
+        LEFT JOIN FETCH r.lawRule lr
+        LEFT JOIN FETCH lr.act a
+        WHERE c.clientId = :clientId
+        ORDER BY r.generatedAt DESC
+    """)
+    List<SummaryReport> findReportsByClientIdEager(@Param("clientId") Long clientId);
+
+    // Also improve the one used in AI pipeline if it exists
+    @Transactional(readOnly = true)
+    @Query("""
+        SELECT r FROM SummaryReport r
+        JOIN FETCH r.document d
+        LEFT JOIN FETCH r.lawRule lr
+        LEFT JOIN FETCH lr.act a
+        WHERE r.document.documentId = :documentId
+        ORDER BY r.generatedAt DESC
+    """)
+    List<SummaryReport> findByDocumentIdWithRelations(@Param("documentId") Long documentId);
+
 }

@@ -19,10 +19,12 @@ import za.ac.alis.entities.DocumentContent;
 import za.ac.alis.entities.FileMetadata;
 import za.ac.alis.enums.DocumentStat;
 import za.ac.alis.enums.IngestionSource;
+import za.ac.alis.repo.AuditLogRepository;
 import za.ac.alis.repo.ClientRepository;
 import za.ac.alis.repo.DocumentContentRepository;
 import za.ac.alis.repo.DocumentRepository;
 import za.ac.alis.repo.FileMetadataRepository;
+import za.ac.alis.repo.SummaryReportRepository;
 import za.ac.alis.utils.FilenameSanitizer;
 
 @Service
@@ -37,19 +39,25 @@ public class DocumentService {
     private final DocumentContentRepository documentContentRepository;
     private final FirebaseStorageService    firebaseStorageService;
     private final AiPipelineService         aiPipelineService;
+    private final SummaryReportRepository   summaryReportRepository;
+    private final AuditLogRepository        auditLogRepository;
 
     public DocumentService(DocumentRepository documentRepository,
                            ClientRepository clientRepository,
                            FileMetadataRepository fileMetadataRepository,
                            DocumentContentRepository documentContentRepository,
                            FirebaseStorageService firebaseStorageService,
-                           AiPipelineService aiPipelineService) {
+                           AiPipelineService aiPipelineService,
+                           SummaryReportRepository summaryReportRepository,
+                           AuditLogRepository auditLogRepository) {
         this.documentRepository        = documentRepository;
         this.clientRepository          = clientRepository;
         this.fileMetadataRepository    = fileMetadataRepository;
         this.documentContentRepository = documentContentRepository;
         this.firebaseStorageService    = firebaseStorageService;
         this.aiPipelineService         = aiPipelineService;
+        this.summaryReportRepository   = summaryReportRepository;
+        this.auditLogRepository        = auditLogRepository;
     }
 
     // ── Upload ────────────────────────────────────────────────────────────────
@@ -144,6 +152,11 @@ public class DocumentService {
     public void deleteDocument(Long id) {
         Document doc = documentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Document not found: " + id));
+
+        summaryReportRepository.deleteByDocument_DocumentId(id);
+        auditLogRepository.deleteByDocumentId(id);
+        documentContentRepository.findByDocument(doc).ifPresent(documentContentRepository::delete);
+        fileMetadataRepository.findByDocument(doc).ifPresent(fileMetadataRepository::delete);
 
         if (doc.getFilePath() != null && !doc.getFilePath().isBlank()) {
             firebaseStorageService.deleteFileByPath(doc.getFilePath());

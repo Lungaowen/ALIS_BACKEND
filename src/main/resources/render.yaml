@@ -38,12 +38,12 @@ services:
         sync: false
 
       # ── Security ────────────────────────────────────────────────────
+      # ── Admin seed ──────────────────────────────────────────────────
       - key: ALIS_JWT_SECRET
         sync: false
       - key: ALIS_JWT_EXPIRATION
-        value: "86400000"      # 24 h in ms; override if needed
+        value: "86400000"
 
-      # ── Admin seed ──────────────────────────────────────────────────
       - key: ALIS_SEED_ADMIN_EMAIL
         sync: false
       - key: ALIS_SEED_ADMIN_PASSWORD
@@ -53,7 +53,7 @@ services:
 
       # ── CORS — replace with your real frontend URL ──────────────────
       - key: ALIS_CORS_ALLOWED_ORIGIN_PATTERNS
-        value: "https://your-frontend.vercel.app"   # CHANGE THIS
+        value: "*"   # CHANGE THIS
 
       # ── JPA ─────────────────────────────────────────────────────────
       - key: DDL_MODE

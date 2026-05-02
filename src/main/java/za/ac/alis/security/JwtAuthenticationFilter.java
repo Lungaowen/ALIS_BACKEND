@@ -14,14 +14,18 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import za.ac.alis.entities.Client;
+import za.ac.alis.repo.ClientRepository;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
+    private final ClientRepository clientRepository;
 
-    public JwtAuthenticationFilter(JwtUtil jwtUtil) {
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, ClientRepository clientRepository) {
         this.jwtUtil = jwtUtil;
+        this.clientRepository = clientRepository;
     }
 
     @Override
@@ -34,19 +38,39 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String token = header.substring(7);
             if (jwtUtil.validateToken(token)) {
                 Claims claims = jwtUtil.parseClaims(token);
-                String userId = claims.getSubject();              // e.g. "1" or "42"
-                String role   = claims.get("role", String.class); // e.g. "ADMIN", "USER"
+                String userId = claims.getSubject();
+                String role = claims.get("role", String.class);
+
+                if (isClientRole(role) && !isActiveClient(userId)) {
+                    filterChain.doFilter(request, response);
+                    return;
+                }
 
                 List<SimpleGrantedAuthority> authorities = List.of(
                         new SimpleGrantedAuthority("ROLE_" + role)
                 );
 
-                // Principal is the userId string – controllers can cast it to Long if needed
                 UsernamePasswordAuthenticationToken auth =
                         new UsernamePasswordAuthenticationToken(userId, null, authorities);
                 SecurityContextHolder.getContext().setAuthentication(auth);
             }
         }
         filterChain.doFilter(request, response);
+    }
+
+    private boolean isClientRole(String role) {
+        return "USER".equals(role)
+                || "LEGAL_PRACTITIONER".equals(role)
+                || "DEAL_MAKER".equals(role);
+    }
+
+    private boolean isActiveClient(String userId) {
+        try {
+            return clientRepository.findById(Long.valueOf(userId))
+                    .map(Client::isActive)
+                    .orElse(false);
+        } catch (NumberFormatException e) {
+            return false;
+        }
     }
 }

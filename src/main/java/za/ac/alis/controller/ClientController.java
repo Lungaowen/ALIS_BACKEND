@@ -28,7 +28,7 @@ import za.ac.alis.service.AdminClientService;
 
 @RestController
 @RequestMapping("/api/admin/clients")
-@PreAuthorize("hasRole('ADMIN')")   // ← enforced now that @EnableMethodSecurity is active
+@PreAuthorize("hasRole('ADMIN')")
 public class ClientController {
 
     private final ClientRepository   clientRepository;

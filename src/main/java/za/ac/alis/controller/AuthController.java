@@ -8,6 +8,7 @@ import za.ac.alis.dto.LoginRequest;
 import za.ac.alis.dto.RegisterRequest;
 import za.ac.alis.entities.Admin;
 import za.ac.alis.entities.Client;
+import za.ac.alis.enums.Role;
 import za.ac.alis.repo.AdminRepository;
 import za.ac.alis.repo.ClientRepository;
 import za.ac.alis.security.JwtUtil;
@@ -37,21 +38,16 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@RequestBody RegisterRequest request) {
         try {
-            Client saved = clientService.registerClient(
-                    request.getFullName(),
-                    request.getEmail(),
-                    request.getPassword()
-            );
-            String token = jwtUtil.generateToken(
-                    saved.getClientId().toString(),
-                    saved.getRole().name()
-            );
+            Client saved = registerByRole(request);
             AuthResponse response = AuthResponse.success(
                     saved.getClientId(), saved.getEmail(),
                     saved.getFullName(), saved.getRole().name(),
                     "Registration successful"
             );
-            response.setToken(token);
+            response.setToken(jwtUtil.generateToken(
+                    saved.getClientId().toString(),
+                    saved.getRole().name()
+            ));
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             return ResponseEntity.badRequest()
@@ -69,17 +65,20 @@ public class AuthController {
         var clientOpt = clientRepository.findByEmail(email);
         if (clientOpt.isPresent()) {
             Client client = clientOpt.get();
+            if (!client.isActive()) {
+                return ResponseEntity.status(403)
+                        .body(AuthResponse.failure("Account is deactivated"));
+            }
             if (passwordEncoder.matches(rawPassword, client.getPasswordHash())) {
-                String token = jwtUtil.generateToken(
-                        client.getClientId().toString(),
-                        client.getRole().name()
-                );
                 AuthResponse response = AuthResponse.success(
                         client.getClientId(), client.getEmail(),
                         client.getFullName(), client.getRole().name(),
                         "Login successful"
                 );
-                response.setToken(token);
+                response.setToken(jwtUtil.generateToken(
+                        client.getClientId().toString(),
+                        client.getRole().name()
+                ));
                 return ResponseEntity.ok(response);
             } else {
                 return ResponseEntity.status(401)
@@ -92,16 +91,15 @@ public class AuthController {
         if (adminOpt.isPresent()) {
             Admin admin = adminOpt.get();
             if (passwordEncoder.matches(rawPassword, admin.getPasswordHash())) {
-                String token = jwtUtil.generateToken(
-                        admin.getAdminId().toString(),
-                        "ADMIN"
-                );
                 AuthResponse response = AuthResponse.success(
                         admin.getAdminId(), admin.getEmail(),
                         admin.getFullName(), "ADMIN",
                         "Admin login successful"
                 );
-                response.setToken(token);
+                response.setToken(jwtUtil.generateToken(
+                        admin.getAdminId().toString(),
+                        "ADMIN"
+                ));
                 return ResponseEntity.ok(response);
             } else {
                 return ResponseEntity.status(401)
@@ -111,5 +109,38 @@ public class AuthController {
 
         return ResponseEntity.status(401)
                 .body(AuthResponse.failure("Invalid credentials"));
+    }
+
+    private Client registerByRole(RegisterRequest request) {
+        Role requestedRole = request.getRole() == null ? Role.USER : request.getRole();
+        return switch (requestedRole) {
+            case USER -> clientService.registerClient(
+                    request.getFullName(),
+                    request.getEmail(),
+                    request.getPassword()
+            );
+            case DEAL_MAKER -> clientService.registerDealMaker(
+                    request.getFullName(),
+                    request.getEmail(),
+                    request.getPassword(),
+                    requiredField(request.getCompanyName(), "companyName"),
+                    requiredField(request.getDealSpecialty(), "dealSpecialty")
+            );
+            case LEGAL_PRACTITIONER -> clientService.registerLegalPractitioner(
+                    request.getFullName(),
+                    request.getEmail(),
+                    request.getPassword(),
+                    requiredField(request.getBarNumber(), "barNumber"),
+                    requiredField(request.getLawFirm(), "lawFirm")
+            );
+            default -> throw new IllegalArgumentException("Unsupported registration role: " + requestedRole);
+        };
+    }
+
+    private String requiredField(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(fieldName + " is required");
+        }
+        return value.trim();
     }
 }

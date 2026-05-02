@@ -31,10 +31,6 @@ public class JwtUtil {
         this.expirationMs = expirationMs;
     }
 
-    /**
-     * @param subjectId  the unique identifier of the user (clientId or adminId as string)
-     * @param role       the user's role (e.g. USER, ADMIN)
-     */
     public String generateToken(String subjectId, String role) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + expirationMs);
