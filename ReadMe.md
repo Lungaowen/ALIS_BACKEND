@@ -1,299 +1,423 @@
-# ALIS — Legal Compliance API
+# ALIS Backend
 
-> Backend API for the Automated Legal Intelligence System
-> Built for POPIA & CPA compliance in South Africa
+ALIS is a Spring Boot backend for legal document upload, compliance analysis, reporting, and admin management.
 
-[![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.3.4-6DB33F?style=flat-square&logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-4169E1?style=flat-square&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![Java](https://img.shields.io/badge/Java-21-ED8B00?style=flat-square&logo=openjdk&logoColor=white)](https://openjdk.org/)
-[![Firebase](https://img.shields.io/badge/Firebase-Storage-FFCA28?style=flat-square&logo=firebase&logoColor=black)](https://firebase.google.com/)
+This README describes the functions that are working in the current codebase.
 
----
+## Stack
 
-## 🌐 Base URL
+- Java 21
+- Spring Boot 3.3.4
+- Spring Security
+- Spring Data JPA / Hibernate
+- PostgreSQL / Supabase
+- Firebase Storage
+- Groq API for AI analysis
+- OpenPDF for report PDFs
 
-| Environment | URL |
-|-------------|-----|
-| Local | `http://localhost:8081` |
-| Production | `https://alis-backend.onrender.com` |
+## Base URLs
 
-All endpoints are prefixed with `/api`.
+- Local: `http://localhost:8081`
+- Health: `http://localhost:8081/health`
+- Root: `http://localhost:8081/`
 
----
+`server.port` defaults to `8081` locally and can be overridden with `PORT`.
 
-## ✅ Production-Ready Features
+## Working Functions
 
-| Feature | Status |
-|---------|--------|
-| User registration & login | ✅ Fully working |
-| Admin client management (CRUD) | ✅ Fully working |
-| Admin dashboard statistics | ✅ Fully working |
-| Audit logging (read-only for admins) | ✅ Fully working |
-| Real-time audit via WebSocket | ✅ Fully working |
-| Document upload to Firebase Storage | ✅ Fully working |
-| **Law rule extraction & CRUD** | ✅ Fully working |
-| AI document analysis pipeline | 🚧 Under development |
-| Compliance report generation | 🚧 Under development |
+### Authentication
 
----
+- User login
+- Admin login
+- Public registration for:
+  - `USER`
+  - `DEAL_MAKER`
+  - `LEGAL_PRACTITIONER`
+- JWT token generation and validation
 
-## 🔐 Authentication
+### User Self-Service
 
-### Register a New Client
+Authenticated `USER`, `DEAL_MAKER`, and `LEGAL_PRACTITIONER` accounts can:
 
-Creates a new user account. Role defaults to `USER`.
+- update their own full name
+- update their own username
+- change their own password by providing `currentPassword` and `newPassword`
 
-POST /api/auth/register
+### Admin Functions
 
-text
+Authenticated `ADMIN` can:
 
-**Request Body**
+- view the admin dashboard
+- view audit logs
+- list clients
+- filter clients
+- update client details
+- delete a client
+- view role distribution, registration trend, top uploaders, and inactive clients
+
+The admin delete flow now removes the user's related documents, report records, file-linked data, and audit log rows before deleting the client record.
+
+### Client Document Functions
+
+Authenticated `USER`, `DEAL_MAKER`, and `LEGAL_PRACTITIONER` can:
+
+- upload documents
+- list their own documents
+- fetch a single owned document
+- fetch reports for an owned document
+- download owned report PDFs
+
+### Compliance Functions
+
+Authenticated users can:
+
+- trigger or re-trigger compliance analysis
+- poll compliance status
+- fetch the final compliance result for a document
+
+### Reports
+
+Authenticated users or admins can fetch:
+
+- report by report ID
+- reports by document ID
+- reports by client ID
+- report PDF download
+
+### Legal Practitioner Rule Management
+
+Authenticated `LEGAL_PRACTITIONER` users can:
+
+- list rules
+- view one rule
+- create rules
+- update rules
+- delete rules
+
+### Specialist Account APIs
+
+Authenticated requests can also create:
+
+- legal practitioners
+- deal makers
+
+These endpoints exist separately from `/api/auth/register`.
+
+### Storage and Processing
+
+- Firebase file upload is working
+- duplicate-file detection is working
+- document metadata persistence is working
+- PDF report generation is wired
+- AI analysis service is wired
+- app startup does not require `GROQ_API_KEY`, but live AI analysis does
+
+## Roles
+
+### `ADMIN`
+
+- `/api/admin/**`
+- full client management
+- dashboard and audit access
+
+### `USER`
+
+- register and log in
+- upload documents
+- run compliance analysis
+- view reports
+- update own profile
+
+### `DEAL_MAKER`
+
+- register and log in
+- upload documents
+- run compliance analysis
+- view reports
+- update own profile
+- cannot manage rules
+
+### `LEGAL_PRACTITIONER`
+
+- register and log in
+- upload documents
+- run compliance analysis
+- view reports
+- update own profile
+- can CRUD rules
+
+## Security Rules
+
+- Public:
+  - `GET /`
+  - `GET /health`
+  - `POST /api/auth/login`
+  - `POST /api/auth/register`
+- Admin only:
+  - `/api/admin/**`
+  - `/swagger-ui/**`
+  - `/v3/api-docs/**`
+- Client roles only:
+  - `/api/client/**`
+- Legal practitioner only:
+  - `/api/rules/**`
+- Everything else requires authentication
+
+## Main Endpoints
+
+### Health
+
+- `GET /`
+- `GET /health`
+
+### Auth
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+
+### Client Profile
+
+- `PUT /api/client/profile`
+
+### Admin
+
+- `GET /api/admin/dashboard`
+- `GET /api/admin/audit`
+- `GET /api/admin/audit/recent`
+- `GET /api/admin/audit/client/{clientId}`
+
+### Admin Client Management
+
+- `GET /api/admin/clients`
+- `GET /api/admin/clients/{id}`
+- `POST /api/admin/clients/filter`
+- `GET /api/admin/clients/by-role`
+- `GET /api/admin/clients/by-date`
+- `GET /api/admin/clients/{id}/document-count`
+- `PUT /api/admin/clients/{id}`
+- `DELETE /api/admin/clients/{id}`
+- `GET /api/admin/clients/reports/summary`
+- `GET /api/admin/clients/reports/role-distribution`
+- `GET /api/admin/clients/reports/registration-trend`
+- `GET /api/admin/clients/reports/top-uploaders`
+- `GET /api/admin/clients/reports/inactive`
+
+### Client Document APIs
+
+- `POST /api/client/documents/upload`
+- `GET /api/client/documents`
+- `GET /api/client/documents/{id}`
+- `GET /api/client/documents/{documentId}/reports`
+- `GET /api/client/reports/{reportId}/download`
+
+### Compliance
+
+- `POST /api/compliance/analyze/{documentId}`
+- `GET /api/compliance/status/{documentId}`
+- `GET /api/compliance/result/{documentId}`
+
+### Reports
+
+- `GET /api/reports/{reportId}`
+- `GET /api/reports/document/{documentId}`
+- `GET /api/reports/client/{clientId}`
+- `GET /api/reports/{reportId}/download-pdf`
+
+### Legal Practitioner Rules
+
+- `GET /api/rules`
+- `GET /api/rules/{id}`
+- `POST /api/rules`
+- `PUT /api/rules/{id}`
+- `DELETE /api/rules/{id}`
+
+### Specialist Account Controllers
+
+- `GET /api/legal-practitioners`
+- `GET /api/legal-practitioners/{id}`
+- `POST /api/legal-practitioners`
+- `GET /api/dealmakers`
+- `GET /api/dealmakers/{id}`
+- `POST /api/dealmakers`
+
+### General Document Controller
+
+These routes also exist and are useful for internal or admin-style flows:
+
+- `POST /api/documents/upload`
+- `GET /api/documents/{id}`
+- `GET /api/documents/client/{clientId}`
+- `GET /api/documents/all`
+- `DELETE /api/documents/{id}`
+- `GET /api/documents/{id}/download`
+
+### Test Upload Endpoint
+
+- `POST /api/test/upload`
+
+This is a lightweight testing endpoint and should not be treated as the primary app upload API.
+
+## Request Examples
+
+### Register a normal user
 
 ```json
+POST /api/auth/register
 {
   "fullName": "John Doe",
   "email": "john@example.com",
-  "password": "securePassword123"
+  "password": "securePassword123",
+  "role": "USER"
 }
-Response 200 OK
+```
 
-json
+### Register a deal maker
+
+```json
+POST /api/auth/register
 {
-  "message": "Registration successful",
-  "clientId": 1,
-  "email": "john@example.com",
-  "fullName": "John Doe",
-  "role": "USER",
-  "success": true
+  "fullName": "Anele Deal",
+  "email": "dealmaker@example.com",
+  "password": "DealPass!2026",
+  "role": "DEAL_MAKER",
+  "companyName": "Blue Horizon Capital",
+  "dealSpecialty": "SME acquisitions"
 }
-Login
-Authenticates a user and returns their profile.
+```
 
-text
+### Register a legal practitioner
+
+```json
+POST /api/auth/register
+{
+  "fullName": "Lebo Practitioner",
+  "email": "legal@example.com",
+  "password": "LegalPass!2026",
+  "role": "LEGAL_PRACTITIONER",
+  "barNumber": "LP-2026-001",
+  "lawFirm": "Mokoena Legal"
+}
+```
+
+### Login
+
+```json
 POST /api/auth/login
-Request Body
-
-json
 {
-  "email": "john@example.com",
-  "password": "securePassword123"
+  "email": "legal@example.com",
+  "password": "LegalPass!2026"
 }
-Response 200 OK
+```
 
-json
+### Update own profile
+
+```json
+PUT /api/client/profile
 {
-  "message": "Login successful",
-  "clientId": 1,
-  "email": "john@example.com",
-  "fullName": "John Doe",
-  "role": "USER",
-  "success": true
+  "fullName": "Lebo Practitioner Updated",
+  "username": "lebo_updated",
+  "currentPassword": "LegalPass!2026",
+  "newPassword": "LegalPass!2026#Updated"
 }
-Response 401 Unauthorized
+```
 
-json
+### Create a rule
+
+```json
+POST /api/rules
 {
-  "message": "Invalid credentials",
-  "success": false
-}
-📄 Document Upload (Firebase Storage)
-Upload a legal document for AI compliance analysis.
-
-text
-POST /api/documents/upload
-Form Data
-
-Key	Type	Description
-file	File	PDF, DOCX, or TXT — max 10 MB
-clientId	Text	ID of the registered client
-Example (cURL)
-
-bash
-curl -X POST http://localhost:8081/api/documents/upload \
-  -F "file=@/path/to/document.pdf" \
-  -F "clientId=1"
-Response 200 OK
-
-json
-{
-  "message": "Document uploaded successfully",
-  "documentId": 3,
-  "title": "document.pdf",
-  "status": "PENDING",
-  "fileUrl": "https://storage.googleapis.com/..."
-}
-Note: The returned fileUrl is a temporary signed URL valid for 1 hour. For permanent access, regenerate a signed URL or configure the bucket as public.
-
-👥 Client Management (Admin Only)
-All endpoints under /api/admin/clients are intended for administrators.
-Role enforcement is not yet active — all requests are currently permitted.
-
-List All Clients (Paginated)
-text
-GET /api/admin/clients?page=0&size=20&sort=createdAt&dir=desc
-Param	Default	Description
-page	0	Page number (zero-indexed)
-size	20	Items per page
-sort	createdAt	Sort field
-dir	desc	Sort direction (asc or desc)
-Response
-
-json
-{
-  "content": [
-    {
-      "clientId": 1,
-      "fullName": "John Doe",
-      "email": "john@example.com",
-      "username": "johndoe_123",
-      "role": "USER",
-      "createdAt": "2026-04-20T10:30:00"
-    }
-  ],
-  "totalPages": 1,
-  "totalElements": 1,
-  "first": true,
-  "last": true,
-  "empty": false
-}
-Other Client Endpoints
-Method	Endpoint	Description
-GET	/api/admin/clients/{id}	Get client by ID
-PUT	/api/admin/clients/{id}	Update client
-DELETE	/api/admin/clients/{id}	Delete client
-GET	/api/admin/clients/by-role?role=DEAL_MAKER	Filter by role
-POST	/api/admin/clients/filter	Advanced filter (role, date range, search)
-GET	/api/admin/clients/reports/summary	Summary statistics
-GET	/api/admin/clients/reports/role-distribution	Role breakdown
-GET	/api/admin/clients/reports/registration-trend?months=12	Monthly trend
-GET	/api/admin/clients/reports/top-uploaders	Most active clients
-GET	/api/admin/clients/reports/inactive	Clients with no documents
-⚠️ Warning: DELETE /api/admin/clients/{id} may return 409 Conflict if the client has associated audit logs or documents. Consider implementing a soft-delete (deactivate flag) instead.
-
-📊 Admin Dashboard
-Single endpoint returning all KPIs and recent activity in one call.
-
-text
-GET /api/admin/dashboard
-Response
-
-json
-{
-  "stats": {
-    "totalClients": 25,
-    "totalDocuments": 42,
-    "totalReports": 38,
-    "activeClients": 20,
-    "pendingDocuments": 5,
-    "failedDocuments": 2,
-    "processedDocuments": 35,
-    "highRiskReports": 7
-  },
-  "clients": [ "..." ],
-  "recentDocuments": [ "..." ],
-  "reports": [ "..." ],
-  "roleDistribution": [
-    { "role": "USER", "count": 18 },
-    { "role": "DEAL_MAKER", "count": 4 },
-    { "role": "LEGAL_PRACTITIONER", "count": 3 }
-  ],
-  "riskDistribution": [
-    { "riskLevel": "LOW", "count": 20 },
-    { "riskLevel": "MEDIUM", "count": 11 },
-    { "riskLevel": "HIGH", "count": 7 }
-  ],
-  "uploadTrend": [
-    { "year": 2026, "month": 3, "count": 12, "label": "Mar 2026" },
-    { "year": 2026, "month": 4, "count": 30, "label": "Apr 2026" }
-  ]
-}
-📜 Audit Logs (Admin Only)
-Read-only. No modification or deletion is permitted.
-
-Method	Endpoint	Description
-GET	/api/admin/audit	All audit logs
-GET	/api/admin/audit/recent?limit=20	Most recent logs
-GET	/api/admin/audit/client/{clientId}	Logs for a specific client
-Sample Log Entry
-
-json
-{
-  "logId": 1042,
-  "actionType": "LOGIN",
-  "description": "Successful login: john@example.com",
-  "ipAddress": "192.168.1.100",
-  "createdAt": "2026-04-20T14:22:00",
-  "clientId": 1,
-  "adminId": null,
-  "documentId": null
-}
-⚖️ Law Rules (Compliance Extraction)
-The system extracts compliance rules from legal Acts (only Chapters 2‑4) and stores them in the law_rule table.
-A full CRUD API is provided for manual rule management.
-
-Method	Endpoint	Description
-GET	/api/rules	List all rules
-GET	/api/rules/{id}	Get a single rule by ID
-POST	/api/rules	Create a new rule (must reference a valid actId)
-PUT	/api/rules/{id}	Update a rule
-DELETE	/api/rules/{id}	Delete a rule
-Sample Rule
-
-json
-{
-  "ruleId": 169,
   "actId": 1,
-  "actName": "Consumer Protection Act",
-  "keyword": "must provide",
-  "requirements": "A supplier must provide a written record of each transaction.",
+  "keyword": "cooling-off period",
+  "requirements": "The agreement must clearly disclose the cooling-off period.",
   "riskLevel": "MEDIUM",
-  "suggestion": "Implement a process to issue transaction records.",
-  "edited": false
+  "suggestion": "Add a dedicated cooling-off clause."
 }
-Rule extraction can also be triggered by placing a PDF in src/main/resources/acts/ and setting
-rule.seeding.enabled=true in application.properties. Extracted rules are saved directly to the database.
+```
 
-🚧 Features Under Development
-Endpoint	Status	Notes
-GET /api/reports/{reportId}	🟡 In progress	Requires AI pipeline completion
-GET /api/reports/{reportId}/download-pdf	🟡 In progress	PDF generation works; needs report data
-AI analysis pipeline	🟡 In progress	Text extraction working; clause extraction & rule matching are next
-🛠️ Tech Stack
-Layer	Technology
-Framework	Spring Boot 3.3.4
-Language	Java 21
-Database	PostgreSQL 15 (Supabase)
-ORM	Hibernate / JPA
-Cloud Storage	Firebase Storage
-Real-time	WebSocket (STOMP over SockJS)
-Security	BCrypt password hashing
-🚀 Getting Started
-1. Clone the repository
+## Environment Variables
 
-bash
-git clone https://github.com/your-org/alis-backend.git
-cd alis-backend
-2. Configure the application
+Required for boot:
 
-Copy application.properties.example to application.properties and fill in:
+- `DB_URL`
+- `DB_USERNAME`
+- `DB_PASSWORD`
+- `ALIS_JWT_SECRET`
+- `FIREBASE_BUCKET_NAME`
 
-DB_URL, DB_USERNAME, DB_PASSWORD — PostgreSQL / Supabase credentials
+Optional but strongly recommended:
 
-Firebase service account JSON path
+- `FIREBASE_SERVICE_ACCOUNT`
+- `GROQ_API_KEY`
+- `ALIS_SEED_ADMIN_EMAIL`
+- `ALIS_SEED_ADMIN_PASSWORD`
+- `ALIS_SEED_ADMIN_NAME`
+- `ALIS_CORS_ALLOWED_ORIGIN_PATTERNS`
+- `ALIS_JWT_EXPIRATION`
+- `DDL_MODE`
+- `JPA_SHOW_SQL`
+- `PORT`
 
-3. Run the application
+## Local Run
 
-bash
+### 1. Run tests
+
+```bash
+mvn test
+```
+
+### 2. Start the app
+
+```bash
 mvn spring-boot:run
-The API will be available at http://localhost:8081.
+```
 
-4. Test the API
+### 3. Or run the packaged jar
 
-Use the Postman collection in /docs/postman or the cURL examples above.
+```bash
+mvn -DskipTests package
+java -jar target/demo-0.0.1-SNAPSHOT.jar
+```
 
-📮 Postman Collection
-A complete Postman collection with all working endpoints is available in the /docs folder.
-Import it directly into Postman to start testing immediately.
+## Render Deployment
 
-📄 License
-This project is proprietary and confidential. Unauthorized distribution is prohibited.
+The project includes a Dockerfile and is suitable for Render deployment.
+
+Recommended Render env vars:
+
+- `DB_URL`
+- `DB_USERNAME`
+- `DB_PASSWORD`
+- `ALIS_JWT_SECRET`
+- `FIREBASE_BUCKET_NAME`
+- `FIREBASE_SERVICE_ACCOUNT` or `/etc/secrets/firebase.json`
+- `GROQ_API_KEY`
+- `ALIS_SEED_ADMIN_EMAIL`
+- `ALIS_SEED_ADMIN_PASSWORD`
+- `ALIS_SEED_ADMIN_NAME`
+- `PORT`
+
+Recommended health check path:
+
+- `/health`
+
+## Notes and Current Limits
+
+- Swagger is admin-protected by the current security config.
+- Admin login returns the ID in the `clientId` field for compatibility with the existing response DTO.
+- There is no public `GET /api/acts` endpoint yet.
+- Password change exists for client roles through `/api/client/profile`.
+- There is still no dedicated admin password-change endpoint.
+
+## Verification Status
+
+The codebase currently passes the automated test suite with:
+
+- `mvn test`
+
+Recent verified backend changes include:
+
+- role-based public registration
+- user self-service profile update
+- password change for client roles
+- safer admin client deletion
+

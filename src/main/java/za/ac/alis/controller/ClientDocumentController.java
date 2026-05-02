@@ -25,14 +25,11 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.transaction.Transactional;
 import za.ac.alis.dto.DocumentResponseDTO;
 import za.ac.alis.dto.ReportInfoDTO;
-import za.ac.alis.entities.Client;
 import za.ac.alis.entities.Document;
 import za.ac.alis.entities.SummaryReport;
-import za.ac.alis.repo.ClientRepository;
 import za.ac.alis.repo.DocumentRepository;
 import za.ac.alis.repo.SummaryReportRepository;
 import za.ac.alis.service.DocumentService;
-import za.ac.alis.service.FirebaseStorageService;
 import za.ac.alis.service.PdfReportService;
 import za.ac.alis.service.SummaryReportService;
 
@@ -44,28 +41,21 @@ public class ClientDocumentController {
     private final DocumentService documentService;
     private final SummaryReportService summaryReportService;
     private final PdfReportService pdfReportService;
-    private final FirebaseStorageService firebaseStorageService;
-    private final ClientRepository clientRepository;
-     private final SummaryReportRepository summaryReportRepository; 
-      private final DocumentRepository documentRepository;
+    private final SummaryReportRepository summaryReportRepository;
+    private final DocumentRepository documentRepository;
 
     public ClientDocumentController(DocumentService documentService,
                                     SummaryReportService summaryReportService,
                                     PdfReportService pdfReportService,
-                                    FirebaseStorageService firebaseStorageService,
-                                    ClientRepository clientRepository,
                                     SummaryReportRepository summaryReportRepository,
                                     DocumentRepository documentRepository) {
         this.documentService = documentService;
         this.summaryReportService = summaryReportService;
         this.pdfReportService = pdfReportService;
-        this.firebaseStorageService = firebaseStorageService;
-        this.clientRepository = clientRepository;
         this.summaryReportRepository = summaryReportRepository;
         this.documentRepository = documentRepository;
     }
 
-    // ── Helper: extract client ID from JWT (see SecurityConfig section) ─────
     private Long getAuthenticatedClientId() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.getPrincipal() instanceof String principal) {
@@ -74,8 +64,7 @@ public class ClientDocumentController {
         throw new IllegalStateException("Not authenticated");
     }
 
-    // ── 1. Upload Document ────────────────────────────────────────────────
-    @PostMapping("/documents/upload")
+    @PostMapping(value = "/documents/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<Map<String, Object>> uploadDocument(
             @RequestParam("file") MultipartFile file) throws Exception {
 
@@ -91,7 +80,6 @@ public class ClientDocumentController {
         ));
     }
 
-    // ── 2. List Own Documents ─────────────────────────────────────────────
     @GetMapping("/documents")
     public ResponseEntity<List<DocumentResponseDTO>> getMyDocuments() {
         Long clientId = getAuthenticatedClientId();
@@ -102,7 +90,6 @@ public class ClientDocumentController {
         return ResponseEntity.ok(docs);
     }
 
-    // ── 3. Get Single Document ────────────────────────────────────────────
     @GetMapping("/documents/{id}")
     public ResponseEntity<DocumentResponseDTO> getDocument(@PathVariable Long id) {
         Long clientId = getAuthenticatedClientId();
@@ -114,53 +101,42 @@ public class ClientDocumentController {
         return ResponseEntity.ok(toDTO(doc));
     }
 
-    // ── 4. Get AI Reports for a Document ──────────────────────────────────
     @GetMapping("/documents/{documentId}/reports")
-public ResponseEntity<List<ReportInfoDTO>> getReportsForDocument(
-        @PathVariable Long documentId) {
+    public ResponseEntity<List<ReportInfoDTO>> getReportsForDocument(@PathVariable Long documentId) {
+        Long clientId = getAuthenticatedClientId();
 
-    Long clientId = getAuthenticatedClientId();
+        if (!documentRepository.existsByDocumentIdAndClientId(documentId, clientId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not your document");
+        }
 
-    // ✅ Ownership check without loading any entity (fast, no lazy fields)
-    if (!documentRepository.existsByDocumentIdAndClientId(documentId, clientId)) {
-        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not your document");
+        List<ReportInfoDTO> dtos = summaryReportService.findByDocumentIdWithRelations(documentId)
+                .stream()
+                .map(ReportInfoDTO::fromEntity)
+                .toList();
+
+        return ResponseEntity.ok(dtos);
     }
 
-    // ✅ Fetch reports with all required relations eagerly
-    List<SummaryReport> reports = summaryReportService.findByDocumentIdWithRelations(documentId);
-
-    List<ReportInfoDTO> dtos = reports.stream()
-            .map(ReportInfoDTO::fromEntity)   // safe – everything is loaded
-            .toList();
-
-    return ResponseEntity.ok(dtos);
-}
-
-    // ── 5. Download Report PDF ────────────────────────────────────────────
-    // ClientDocumentController.java
-@GetMapping("/reports/{reportId}/download")
-@Transactional
-public void downloadReport(@PathVariable Long reportId, HttpServletResponse response) throws IOException {
-    Long clientId = getAuthenticatedClientId();
-
-    // Use the eager-fetch query instead of summaryReportService.findById
-     SummaryReport report = summaryReportRepository.findByIdWithRelations(reportId)
+    @GetMapping("/reports/{reportId}/download")
+    @Transactional
+    public void downloadReport(@PathVariable Long reportId, HttpServletResponse response) throws IOException {
+        Long clientId = getAuthenticatedClientId();
+        SummaryReport report = summaryReportRepository.findByIdWithRelations(reportId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
-    
-     if (!report.getDocument().getClient().getClientId().equals(clientId)) {
+
+        if (!report.getDocument().getClient().getClientId().equals(clientId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not your report");
         }
 
-    byte[] pdfBytes = pdfReportService.generateComplianceReportPdf(report);
-    response.setContentType(MediaType.APPLICATION_PDF_VALUE);
-    response.setHeader(HttpHeaders.CONTENT_DISPOSITION,
-            "attachment; filename=Compliance_Report_" + reportId + ".pdf");
-    response.setContentLength(pdfBytes.length);
-    response.getOutputStream().write(pdfBytes);
-    response.getOutputStream().flush();
-}
+        byte[] pdfBytes = pdfReportService.generateComplianceReportPdf(report);
+        response.setContentType(MediaType.APPLICATION_PDF_VALUE);
+        response.setHeader(HttpHeaders.CONTENT_DISPOSITION,
+                "attachment; filename=Compliance_Report_" + reportId + ".pdf");
+        response.setContentLength(pdfBytes.length);
+        response.getOutputStream().write(pdfBytes);
+        response.getOutputStream().flush();
+    }
 
-    // ── Helper DTOs ──────────────────────────────────────────────────────
     private DocumentResponseDTO toDTO(Document d) {
         DocumentResponseDTO dto = new DocumentResponseDTO();
         dto.setDocumentId(d.getDocumentId());
@@ -174,9 +150,4 @@ public void downloadReport(@PathVariable Long reportId, HttpServletResponse resp
         dto.setClientId(d.getClient() != null ? d.getClient().getClientId() : null);
         return dto;
     }
-
-    private ReportInfoDTO toReportDTO(SummaryReport r) {
-        return ReportInfoDTO.fromEntity(r);
-    }
-   
 }

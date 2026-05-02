@@ -7,9 +7,11 @@ import org.springframework.transaction.annotation.Transactional;
 import za.ac.alis.dto.AdminClientDTO;
 import za.ac.alis.entities.Client;
 import za.ac.alis.entities.DealMaker;
+import za.ac.alis.entities.Document;
 import za.ac.alis.entities.LegalPractitioner;
 import za.ac.alis.enums.Role;
 import za.ac.alis.projections.*;
+import za.ac.alis.repo.AuditLogRepository;
 import za.ac.alis.repo.ClientRepository;
 import za.ac.alis.repo.DealMakerRepository;
 import za.ac.alis.repo.LegalPractitionerRepository;
@@ -27,13 +29,19 @@ public class AdminClientService {
     private final ClientRepository clientRepository;
     private final DealMakerRepository dealMakerRepository;
     private final LegalPractitionerRepository legalPractitionerRepository;
+    private final DocumentService documentService;
+    private final AuditLogRepository auditLogRepository;
 
     public AdminClientService(ClientRepository clientRepository,
                               DealMakerRepository dealMakerRepository,
-                              LegalPractitionerRepository legalPractitionerRepository) {
+                              LegalPractitionerRepository legalPractitionerRepository,
+                              DocumentService documentService,
+                              AuditLogRepository auditLogRepository) {
         this.clientRepository = clientRepository;
         this.dealMakerRepository = dealMakerRepository;
         this.legalPractitionerRepository = legalPractitionerRepository;
+        this.documentService = documentService;
+        this.auditLogRepository = auditLogRepository;
     }
 
     public AdminClientDTO.ClientDetail getClientById(Long id) {
@@ -95,10 +103,16 @@ public class AdminClientService {
     }
 
     public AdminClientDTO.DeleteResponse deleteClient(Long id) {
-        if (!clientRepository.existsById(id)) {
-            throw new RuntimeException("Client not found");
+        Client client = clientRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Client not found"));
+
+        List<Document> documents = documentService.getDocumentsByClientId(id);
+        for (Document document : documents) {
+            documentService.deleteDocument(document.getDocumentId());
         }
-        clientRepository.deleteById(id);
+
+        auditLogRepository.deleteByClientClientId(id);
+        clientRepository.delete(client);
         return new AdminClientDTO.DeleteResponse(id, "Client deleted successfully");
     }
 

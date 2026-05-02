@@ -21,3 +21,9 @@ target/
 # OS
 .DS_Store
 Thumbs.db
+target/
+*.log
+.env
+*.iml
+.idea/
+.vscode/

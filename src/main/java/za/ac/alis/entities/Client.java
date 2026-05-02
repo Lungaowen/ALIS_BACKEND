@@ -49,6 +49,12 @@ public class Client {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
+    @Column(name = "active")
+    private Boolean active = true;
+
+    @Column(name = "deactivated_at")
+    private LocalDateTime deactivatedAt;
+
     // 🔥 FIX LAZY LOADING CRASH
     @JsonIgnore
     @OneToMany(mappedBy = "client", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
@@ -117,6 +123,26 @@ public class Client {
 
     public LocalDateTime getCreatedAt() {
         return createdAt;
+    }
+
+    public Boolean getActive() {
+        return active;
+    }
+
+    public boolean isActive() {
+        return active == null || active;
+    }
+
+    public void setActive(Boolean active) {
+        this.active = active;
+    }
+
+    public LocalDateTime getDeactivatedAt() {
+        return deactivatedAt;
+    }
+
+    public void setDeactivatedAt(LocalDateTime deactivatedAt) {
+        this.deactivatedAt = deactivatedAt;
     }
 
     public List<Document> getDocuments() {
