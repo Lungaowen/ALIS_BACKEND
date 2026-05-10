@@ -47,7 +47,6 @@ public class SecurityConfig {
             .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
             .requestMatchers("/", "/health").permitAll()
             .requestMatchers("/api/auth/login", "/api/auth/register").permitAll()
-            .requestMatchers("/api/copilot/**").permitAll()   // ← ADD THIS LINE
             .requestMatchers("/api/rules", "/api/rules/**").hasRole("LEGAL_PRACTITIONER")
             .requestMatchers("/api/admin/**").hasRole("ADMIN")
             .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").hasRole("ADMIN")

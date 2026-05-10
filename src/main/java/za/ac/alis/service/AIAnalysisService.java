@@ -44,17 +44,21 @@ public class AIAnalysisService {
 
     private static final Logger log = LoggerFactory.getLogger(AIAnalysisService.class);
 
-    private static final String GROQ_MODEL   = "llama-3.3-70b-versatile";
-    private static final String GROQ_URL     = "https://api.groq.com/openai/v1/chat/completions";
     private static final int    TOP_RULES_FOR_PROMPT = 5;
     private static final int    MAX_DOC_CHARS        = 4_000; // token budget
 
     private final String       groqApiKey;
+    private final String       groqModel;
+    private final String       groqUrl;
     private final HttpClient   http;
     private final ObjectMapper mapper;
 
-    public AIAnalysisService(@Value("${alis.ai.groq.key:}") String groqApiKey) {
+    public AIAnalysisService(@Value("${alis.ai.groq.key:}") String groqApiKey,
+                             @Value("${alis.ai.groq.model:llama-3.3-70b-versatile}") String groqModel,
+                             @Value("${alis.ai.groq.url:https://api.groq.com/openai/v1/chat/completions}") String groqUrl) {
         this.groqApiKey = groqApiKey;
+        this.groqModel  = groqModel;
+        this.groqUrl    = groqUrl;
         this.http   = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(30))
                 .build();
@@ -80,7 +84,7 @@ public class AIAnalysisService {
         report.setDocument(document);
         report.setClient(document.getClient());
         report.setGeneratedAt(LocalDateTime.now());
-        report.setModelVersion(GROQ_MODEL);
+        report.setModelVersion(groqModel);
 
         // ── Guard: no API key ──────────────────────────────────────────────────
         if (groqApiKey == null || groqApiKey.isBlank()) {
@@ -213,9 +217,10 @@ public class AIAnalysisService {
 
     private String callGroq(String prompt) throws Exception {
         ObjectNode body = mapper.createObjectNode();
-        body.put("model", GROQ_MODEL);
+        body.put("model", groqModel);
         body.put("temperature", 0.2);
         body.put("max_tokens", 1024);
+        body.putObject("response_format").put("type", "json_object");
 
         ArrayNode messages  = body.putArray("messages");
         ObjectNode userMsg  = messages.addObject();
@@ -223,7 +228,7 @@ public class AIAnalysisService {
         userMsg.put("content", prompt);
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(GROQ_URL))
+                .uri(URI.create(groqUrl))
                 .header("Authorization", "Bearer " + groqApiKey)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)))
@@ -244,8 +249,11 @@ public class AIAnalysisService {
 
     private void parseAndPopulate(String rawResponse, SummaryReport report) throws Exception {
         JsonNode root    = mapper.readTree(rawResponse);
-        String   content = root.path("choices").get(0)
+        String   content = root.path("choices").path(0)
                                .path("message").path("content").asText();
+        if (content == null || content.isBlank()) {
+            throw new RuntimeException("Groq returned an empty completion");
+        }
 
         // Strip optional markdown code fences
         content = content.replaceAll("(?s)^```json\\s*", "")

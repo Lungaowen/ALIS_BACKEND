@@ -109,7 +109,8 @@ These endpoints exist separately from `/api/auth/register`.
 - duplicate-file detection is working
 - document metadata persistence is working
 - PDF report generation is wired
-- AI analysis service is wired
+- AI analysis and copilot chat use Groq directly from the backend
+- document upload automatically starts the Groq compliance pipeline
 - app startup does not require `GROQ_API_KEY`, but live AI analysis does
 
 ## Roles
@@ -348,6 +349,8 @@ Optional but strongly recommended:
 
 - `FIREBASE_SERVICE_ACCOUNT`
 - `GROQ_API_KEY`
+- `GROQ_MODEL` (defaults to `llama-3.3-70b-versatile`)
+- `GROQ_API_URL` (defaults to Groq's OpenAI-compatible chat completions endpoint)
 - `ALIS_SEED_ADMIN_EMAIL`
 - `ALIS_SEED_ADMIN_PASSWORD`
 - `ALIS_SEED_ADMIN_NAME`
@@ -391,6 +394,8 @@ Recommended Render env vars:
 - `FIREBASE_BUCKET_NAME`
 - `FIREBASE_SERVICE_ACCOUNT` or `/etc/secrets/firebase.json`
 - `GROQ_API_KEY`
+- `GROQ_MODEL` (optional)
+- `GROQ_API_URL` (optional)
 - `ALIS_SEED_ADMIN_EMAIL`
 - `ALIS_SEED_ADMIN_PASSWORD`
 - `ALIS_SEED_ADMIN_NAME`
@@ -420,4 +425,3 @@ Recent verified backend changes include:
 - user self-service profile update
 - password change for client roles
 - safer admin client deletion
-
