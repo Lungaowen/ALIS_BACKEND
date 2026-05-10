@@ -11,6 +11,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import za.ac.alis.entities.Client;
@@ -27,9 +29,6 @@ import za.ac.alis.repo.FileMetadataRepository;
 import za.ac.alis.repo.SummaryReportRepository;
 import za.ac.alis.utils.FilenameSanitizer;
 
-// ★ replaced import
-import za.ac.alis.service.aiengine.AiEngineClient;
-
 @Service
 public class DocumentService {
 
@@ -42,8 +41,7 @@ public class DocumentService {
     private final DocumentContentRepository documentContentRepository;
     private final FirebaseStorageService    firebaseStorageService;
 
-    // ★ AiEngineClient replaces AiPipelineService
-    private final AiEngineClient            aiEngineClient;
+    private final AiPipelineService         aiPipelineService;
 
     private final SummaryReportRepository   summaryReportRepository;
     private final AuditLogRepository        auditLogRepository;
@@ -53,7 +51,7 @@ public class DocumentService {
                            FileMetadataRepository fileMetadataRepository,
                            DocumentContentRepository documentContentRepository,
                            FirebaseStorageService firebaseStorageService,
-                           AiEngineClient aiEngineClient,            // ★ new dependency
+                           AiPipelineService aiPipelineService,
                            SummaryReportRepository summaryReportRepository,
                            AuditLogRepository auditLogRepository) {
         this.documentRepository        = documentRepository;
@@ -61,7 +59,7 @@ public class DocumentService {
         this.fileMetadataRepository    = fileMetadataRepository;
         this.documentContentRepository = documentContentRepository;
         this.firebaseStorageService    = firebaseStorageService;
-        this.aiEngineClient            = aiEngineClient;
+        this.aiPipelineService         = aiPipelineService;
         this.summaryReportRepository   = summaryReportRepository;
         this.auditLogRepository        = auditLogRepository;
     }
@@ -127,11 +125,27 @@ public class DocumentService {
         content.setDocument(savedDoc);
         documentContentRepository.save(content);
 
-        // ★ Trigger the AI engine's analysis pipeline
-        log.info("Triggering AI engine analysis for Document ID={}", savedDoc.getDocumentId());
-        aiEngineClient.triggerAnalysis(savedDoc.getDocumentId());
+        triggerGroqAnalysisAfterCommit(savedDoc.getDocumentId());
 
         return savedDoc;
+    }
+
+    private void triggerGroqAnalysisAfterCommit(Long documentId) {
+        Runnable trigger = () -> {
+            log.info("Triggering Groq compliance analysis for Document ID={}", documentId);
+            aiPipelineService.processDocument(documentId);
+        };
+
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    trigger.run();
+                }
+            });
+        } else {
+            trigger.run();
+        }
     }
 
     // ── Read ──────────────────────────────────────────────────────────────────

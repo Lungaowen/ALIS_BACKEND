@@ -116,9 +116,14 @@ public class AiPipelineService {
         if (report == null) {
             throw new RuntimeException("AI analysis returned null report");
         }
-        report.setAnalysisStatus(AnalysisStatus.COMPLETED);
+        if (report.getAnalysisStatus() == null) {
+            report.setAnalysisStatus(AnalysisStatus.COMPLETED);
+        }
         summaryReportRepository.save(report);
         log.info("  Report saved (risk={})", report.getRiskLevel());
+        if (report.getAnalysisStatus() == AnalysisStatus.FAILED) {
+            throw new RuntimeException(report.getAiExplanation());
+        }
     }
 
     private void markDocumentCompleted(Document document) {
