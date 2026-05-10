@@ -27,6 +27,9 @@ import za.ac.alis.repo.FileMetadataRepository;
 import za.ac.alis.repo.SummaryReportRepository;
 import za.ac.alis.utils.FilenameSanitizer;
 
+// ★ replaced import
+import za.ac.alis.service.aiengine.AiEngineClient;
+
 @Service
 public class DocumentService {
 
@@ -38,7 +41,10 @@ public class DocumentService {
     private final FileMetadataRepository    fileMetadataRepository;
     private final DocumentContentRepository documentContentRepository;
     private final FirebaseStorageService    firebaseStorageService;
-    private final AiPipelineService         aiPipelineService;
+
+    // ★ AiEngineClient replaces AiPipelineService
+    private final AiEngineClient            aiEngineClient;
+
     private final SummaryReportRepository   summaryReportRepository;
     private final AuditLogRepository        auditLogRepository;
 
@@ -47,7 +53,7 @@ public class DocumentService {
                            FileMetadataRepository fileMetadataRepository,
                            DocumentContentRepository documentContentRepository,
                            FirebaseStorageService firebaseStorageService,
-                           AiPipelineService aiPipelineService,
+                           AiEngineClient aiEngineClient,            // ★ new dependency
                            SummaryReportRepository summaryReportRepository,
                            AuditLogRepository auditLogRepository) {
         this.documentRepository        = documentRepository;
@@ -55,12 +61,12 @@ public class DocumentService {
         this.fileMetadataRepository    = fileMetadataRepository;
         this.documentContentRepository = documentContentRepository;
         this.firebaseStorageService    = firebaseStorageService;
-        this.aiPipelineService         = aiPipelineService;
+        this.aiEngineClient            = aiEngineClient;
         this.summaryReportRepository   = summaryReportRepository;
         this.auditLogRepository        = auditLogRepository;
     }
 
-    // ── Upload ────────────────────────────────────────────────────────────────
+    // ── Create (Upload) ───────────────────────────────────────────────────────
     @Transactional
     public Document uploadDocument(MultipartFile file, Long clientId) throws Exception {
 
@@ -71,13 +77,12 @@ public class DocumentService {
             throw new IllegalArgumentException("File exceeds maximum size of 10 MB");
         }
 
-        String mimeType          = file.getContentType();
-        String safeFilename      = FilenameSanitizer.sanitize(file.getOriginalFilename(), mimeType);
+        String mimeType     = file.getContentType();
+        String safeFilename = FilenameSanitizer.sanitize(file.getOriginalFilename(), mimeType);
 
         Client client = clientRepository.findById(clientId)
                 .orElseThrow(() -> new RuntimeException("Client not found: " + clientId));
 
-        // Duplicate-file detection via SHA-256
         String hash;
         try (InputStream is = file.getInputStream()) {
             hash = computeSha256(is);
@@ -87,7 +92,6 @@ public class DocumentService {
                     "Duplicate file detected. This document has already been uploaded.");
         }
 
-        // Persist Document record first (gets an ID)
         Document doc = new Document();
         doc.setTitle(safeFilename);
         doc.setClient(client);
@@ -97,23 +101,20 @@ public class DocumentService {
         Document savedDoc = documentRepository.saveAndFlush(doc);
         log.info("Created Document ID={} for client={}", savedDoc.getDocumentId(), clientId);
 
-        // Upload to Firebase and capture BOTH path and signed URL
         FirebaseStorageService.StorageResult upload;
         try (InputStream is = file.getInputStream()) {
             upload = firebaseStorageService.uploadFile(is, safeFilename, mimeType, clientId);
         } catch (Exception e) {
             log.error("Firebase upload failed for Document ID={}", savedDoc.getDocumentId(), e);
             savedDoc.setStatus(DocumentStat.FAILED);
-           documentRepository.saveAndFlush(doc);
+            documentRepository.saveAndFlush(doc);
             throw new RuntimeException("Failed to upload file to cloud storage", e);
         }
 
-        // FIX: store the REAL Firebase object path (not a guessed path)
         savedDoc.setFilePath(upload.getObjectPath());
         savedDoc.setFileUrl(upload.getSignedUrl());
         documentRepository.saveAndFlush(doc);
 
-        // Persist FileMetadata
         FileMetadata meta = new FileMetadata();
         meta.setDocument(savedDoc);
         meta.setMimeType(mimeType);
@@ -122,14 +123,13 @@ public class DocumentService {
         meta.setUploadedAt(LocalDateTime.now());
         fileMetadataRepository.save(meta);
 
-        // Persist empty DocumentContent placeholder
         DocumentContent content = new DocumentContent();
         content.setDocument(savedDoc);
         documentContentRepository.save(content);
 
-        // FIX: enable the AI pipeline (was commented out)
-        log.info("Triggering AI pipeline for Document ID={}", savedDoc.getDocumentId());
-        aiPipelineService.processDocument(savedDoc.getDocumentId());
+        // ★ Trigger the AI engine's analysis pipeline
+        log.info("Triggering AI engine analysis for Document ID={}", savedDoc.getDocumentId());
+        aiEngineClient.triggerAnalysis(savedDoc.getDocumentId());
 
         return savedDoc;
     }
@@ -145,6 +145,25 @@ public class DocumentService {
 
     public List<Document> getAllDocuments() {
         return documentRepository.findAll();
+    }
+
+    // ── Update ────────────────────────────────────────────────────────────────
+    @Transactional
+    public Document updateDocument(Long id, Long clientId, String newTitle) {
+        Document doc = documentRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Document not found: " + id));
+
+        if (!doc.getClient().getClientId().equals(clientId)) {
+            throw new SecurityException("Not your document");
+        }
+
+        if (newTitle != null && !newTitle.isBlank()) {
+            doc.setTitle(newTitle.trim());
+        }
+
+        Document updated = documentRepository.save(doc);
+        log.info("Updated Document ID={} — new title='{}'", id, updated.getTitle());
+        return updated;
     }
 
     // ── Delete ────────────────────────────────────────────────────────────────
