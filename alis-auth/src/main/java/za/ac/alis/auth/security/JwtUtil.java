@@ -11,6 +11,7 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.security.WeakKeyException;
 
 @Component
 public class JwtUtil {
@@ -24,7 +25,7 @@ public class JwtUtil {
     ) {
         byte[] keyBytes = secret.getBytes();
         if (keyBytes.length < 32) {
-            throw new IllegalArgumentException(
+            throw new WeakKeyException(
                 "JWT secret must be at least 32 bytes. Current length: " + keyBytes.length
             );
         }
@@ -39,8 +40,8 @@ public class JwtUtil {
      *   - "role"     → maps to a PostgreSQL role (use "authenticated" for RLS)
      *   - "sub"      → the user ID
      *
-     * Your app reads:
-     *   - "app_role" → your business role (ADMIN, LEGAL_PRACTITIONER, etc.)
+     * Spring Security reads:
+     *   - "app_role" → your business role (ADMIN, LEGAL_PRACTITIONER, DEAL_MAKER, USER)
      */
     public String generateToken(String subjectId, String appRole) {
         Date now = new Date();
@@ -48,8 +49,8 @@ public class JwtUtil {
 
         return Jwts.builder()
                 .setSubject(subjectId)
-                .claim("role", "authenticated")   // PostgREST / RLS role
-                .claim("app_role", appRole)        // your Spring Security role
+                .claim("role", "authenticated")   // for PostgREST / RLS
+                .claim("app_role", appRole)        // for Spring Security
                 .setIssuedAt(now)
                 .setExpiration(expiry)
                 .signWith(key, SignatureAlgorithm.HS256)

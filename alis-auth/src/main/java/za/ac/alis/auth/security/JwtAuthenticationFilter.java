@@ -38,7 +38,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (jwtUtil.validateToken(token)) {
                 Claims claims = jwtUtil.parseClaims(token);
                 String userId = claims.getSubject();
-                String role = claims.get("role", String.class);
+
+                // Read the actual business role from "app_role"
+                String role = claims.get("app_role", String.class);
+                // Fallback to "role" claim for backward compatibility
+                if (role == null) {
+                    role = claims.get("role", String.class);
+                }
 
                 if (isClientRole(role) && !isActiveClient(userId)) {
                     filterChain.doFilter(request, response);

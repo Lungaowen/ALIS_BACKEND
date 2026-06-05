@@ -50,6 +50,6 @@ class FirebaseConfigTests {
     void rejectsNonJsonValueThatIsNotAReadableFilePath() {
         assertThatThrownBy(() -> FirebaseConfig.configuredServiceAccountStream("/missing/firebase-service-account.json"))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("FIREBASE_SERVICE_ACCOUNT is not JSON");
+                .hasMessageContaining("not JSON and does not point to a readable credentials file");
     }
 }

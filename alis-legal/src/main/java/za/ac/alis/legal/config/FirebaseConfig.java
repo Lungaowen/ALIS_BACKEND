@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.io.ClassPathResource;
 
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.cloud.firestore.Firestore;
@@ -52,7 +53,7 @@ public class FirebaseConfig {
         }
 
         if (storageBucket == null || storageBucket.isBlank()) {
-            throw new IllegalStateException("Firebase bucket name not configured. Set FIREBASE_BUCKET_NAME.");
+            throw new IllegalStateException("Firebase bucket name not configured. Set firebase.bucket.name.");
         }
 
         FirebaseOptions options;
@@ -61,11 +62,6 @@ public class FirebaseConfig {
                     .setCredentials(GoogleCredentials.fromStream(serviceAccountStream))
                     .setStorageBucket(storageBucket)
                     .build();
-        } catch (IOException e) {
-            throw new IOException(
-                    "Failed to load Firebase credentials. Set FIREBASE_SERVICE_ACCOUNT to valid service-account JSON "
-                            + "or to a readable credentials file path, or provide /etc/secrets/firebase.json.",
-                    e);
         }
 
         FirebaseApp.initializeApp(options);
@@ -73,32 +69,30 @@ public class FirebaseConfig {
     }
 
     private InputStream openServiceAccountStream() throws IOException {
-        File secretFile = new File("/etc/secrets/firebase.json");
-
-        if (secretFile.isFile()) {
-            log.info("Loading Firebase credentials from Render secret file");
-            return new FileInputStream(secretFile);
+        if (serviceAccountJson != null && !serviceAccountJson.isBlank()) {
+            String trimmed = serviceAccountJson.trim();
+            if (looksLikeJson(trimmed)) {
+                log.info("Loading Firebase credentials from firebase.service.account JSON");
+            } else {
+                log.info("Loading Firebase credentials from firebase.service.account file path");
+            }
+            return configuredServiceAccountStream(serviceAccountJson)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "Invalid firebase.service.account – not JSON and not a readable file."));
         }
 
-        if (serviceAccountJson == null || serviceAccountJson.isBlank()) {
-            throw new IllegalStateException(
-                    "Firebase credentials not found. Provide /etc/secrets/firebase.json or set FIREBASE_SERVICE_ACCOUNT "
-                            + "to valid service-account JSON or a readable credentials file path.");
+        ClassPathResource classPathResource = new ClassPathResource("firebase-service-account.json");
+        if (classPathResource.exists()) {
+            log.info("Loading Firebase credentials from classpath: firebase-service-account.json");
+            return classPathResource.getInputStream();
         }
 
-        String trimmed = serviceAccountJson.trim();
-        if (looksLikeJson(trimmed)) {
-            log.info("Loading Firebase credentials from FIREBASE_SERVICE_ACCOUNT JSON");
-        } else {
-            log.info("Loading Firebase credentials from FIREBASE_SERVICE_ACCOUNT file path");
-        }
-
-        return configuredServiceAccountStream(serviceAccountJson)
-                .orElseThrow(() -> new IllegalStateException(
-                        "Firebase credentials not found. Set FIREBASE_SERVICE_ACCOUNT to valid service-account JSON "
-                                + "or a readable credentials file path."));
+        throw new IllegalStateException(
+                "Firebase credentials not found. Set firebase.service.account (JSON or file path) "
+                        + "or place firebase-service-account.json in src/main/resources.");
     }
 
+    // Package-private static method for testing and internal use
     static Optional<InputStream> configuredServiceAccountStream(String configuredValue) throws IOException {
         if (configuredValue == null || configuredValue.isBlank()) {
             return Optional.empty();
@@ -112,7 +106,7 @@ public class FirebaseConfig {
         File credentialsFile = new File(trimmed);
         if (!credentialsFile.isFile()) {
             throw new IllegalStateException(
-                    "FIREBASE_SERVICE_ACCOUNT is not JSON and does not point to a readable credentials file.");
+                    "firebase.service.account is not JSON and does not point to a readable credentials file.");
         }
 
         return Optional.of(new FileInputStream(credentialsFile));

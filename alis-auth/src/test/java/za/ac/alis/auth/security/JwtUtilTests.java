@@ -3,27 +3,33 @@ package za.ac.alis.auth.security;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import io.jsonwebtoken.security.WeakKeyException;
 import org.junit.jupiter.api.Test;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.security.WeakKeyException;
 
 class JwtUtilTests {
 
+    private static final String VALID_SECRET = "my-very-long-jwt-secret-key-which-is-32-bytes!";
+    private static final String SHORT_SECRET = "short";
+
     @Test
     void generatesAndParsesTokenWithConfiguredSecret() {
-        JwtUtil jwtUtil = new JwtUtil("0123456789abcdef0123456789abcdef", 60_000);
-
-        String token = jwtUtil.generateToken("42", "LEGAL_PRACTITIONER");
-
-        assertThat(jwtUtil.validateToken(token)).isTrue();
-        assertThat(jwtUtil.parseClaims(token).getSubject()).isEqualTo("42");
-        assertThat(jwtUtil.parseClaims(token).get("role", String.class)).isEqualTo("LEGAL_PRACTITIONER");
+        JwtUtil jwtUtil = new JwtUtil(VALID_SECRET, 86400000);
+        String token = jwtUtil.generateToken("123", "LEGAL_PRACTITIONER");
+        Claims claims = jwtUtil.parseClaims(token);
+        
+        assertThat(claims.getSubject()).isEqualTo("123");
+        
+        // Business role is stored in "app_role"
+        assertThat(claims.get("app_role", String.class)).isEqualTo("LEGAL_PRACTITIONER");
+        
+        // The "role" claim is fixed to "authenticated" for PostgreSQL RLS
+        assertThat(claims.get("role", String.class)).isEqualTo("authenticated");
     }
 
     @Test
     void rejectsSecretsShorterThanThirtyTwoBytes() {
-        // The JwtUtil constructor now accepts any length,
-        // but Keys.hmacShaKeyFor() throws WeakKeyException for secrets < 256 bits (32 bytes).
-        assertThrows(WeakKeyException.class,
-                () -> new JwtUtil("too-short-secret", 60_000));
+        assertThrows(WeakKeyException.class, () -> new JwtUtil(SHORT_SECRET, 86400000));
     }
 }
