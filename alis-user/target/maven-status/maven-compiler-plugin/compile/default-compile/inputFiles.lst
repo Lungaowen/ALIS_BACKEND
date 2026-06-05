@@ -1,0 +1,16 @@
+C:\Users\lunga\OneDrive\Desktop\ALIS_BACKEND-main - Copy - Copy\alis-user\src\main\java\za\ac\alis\user\api\UserRegistrationService.java
+C:\Users\lunga\OneDrive\Desktop\ALIS_BACKEND-main - Copy - Copy\alis-user\src\main\java\za\ac\alis\user\config\AdminSeeder.java
+C:\Users\lunga\OneDrive\Desktop\ALIS_BACKEND-main - Copy - Copy\alis-user\src\main\java\za\ac\alis\user\config\UserModuleAutoConfiguration.java
+C:\Users\lunga\OneDrive\Desktop\ALIS_BACKEND-main - Copy - Copy\alis-user\src\main\java\za\ac\alis\user\controller\ClientController.java
+C:\Users\lunga\OneDrive\Desktop\ALIS_BACKEND-main - Copy - Copy\alis-user\src\main\java\za\ac\alis\user\controller\ClientProfileController.java
+C:\Users\lunga\OneDrive\Desktop\ALIS_BACKEND-main - Copy - Copy\alis-user\src\main\java\za\ac\alis\user\controller\DealmakerController.java
+C:\Users\lunga\OneDrive\Desktop\ALIS_BACKEND-main - Copy - Copy\alis-user\src\main\java\za\ac\alis\user\controller\LegalPractitionerController.java
+C:\Users\lunga\OneDrive\Desktop\ALIS_BACKEND-main - Copy - Copy\alis-user\src\main\java\za\ac\alis\user\persistence\AdminRepository.java
+C:\Users\lunga\OneDrive\Desktop\ALIS_BACKEND-main - Copy - Copy\alis-user\src\main\java\za\ac\alis\user\persistence\ClientRepository.java
+C:\Users\lunga\OneDrive\Desktop\ALIS_BACKEND-main - Copy - Copy\alis-user\src\main\java\za\ac\alis\user\persistence\DealMakerRepository.java
+C:\Users\lunga\OneDrive\Desktop\ALIS_BACKEND-main - Copy - Copy\alis-user\src\main\java\za\ac\alis\user\persistence\LegalPractitionerRepository.java
+C:\Users\lunga\OneDrive\Desktop\ALIS_BACKEND-main - Copy - Copy\alis-user\src\main\java\za\ac\alis\user\service\AdminClientService.java
+C:\Users\lunga\OneDrive\Desktop\ALIS_BACKEND-main - Copy - Copy\alis-user\src\main\java\za\ac\alis\user\service\ClientService.java
+C:\Users\lunga\OneDrive\Desktop\ALIS_BACKEND-main - Copy - Copy\alis-user\src\main\java\za\ac\alis\user\service\DealMakerService.java
+C:\Users\lunga\OneDrive\Desktop\ALIS_BACKEND-main - Copy - Copy\alis-user\src\main\java\za\ac\alis\user\service\LegalPractitionerService.java
+C:\Users\lunga\OneDrive\Desktop\ALIS_BACKEND-main - Copy - Copy\alis-user\src\main\java\za\ac\alis\user\support\UserActiveClientChecker.java

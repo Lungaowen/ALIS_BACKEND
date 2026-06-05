@@ -1,0 +1,8 @@
+za\ac\alis\ai\config\AiModuleAutoConfiguration.class
+za\ac\alis\ai\service\RagGenerationService.class
+za\ac\alis\ai\service\AIAnalysisService.class
+za\ac\alis\ai\service\ClauseExtractionService.class
+za\ac\alis\ai\service\RuleExtractionService$SectionSegment.class
+za\ac\alis\ai\service\TextExtractionService.class
+za\ac\alis\ai\service\AIAnalysisService$1Scored.class
+za\ac\alis\ai\service\RuleExtractionService.class
