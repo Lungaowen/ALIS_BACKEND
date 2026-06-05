@@ -1,6 +1,4 @@
 target/
-.env
-firebase-service-account.json
 /config/
 *.log
 .vscode/
