@@ -55,29 +55,71 @@ public class FirebaseConfig {
             throw new IllegalStateException("Firebase bucket name not configured. Set FIREBASE_BUCKET_NAME.");
         }
 
-        InputStream serviceAccountStream = null;
-        File secretFile = new File("/etc/secrets/firebase.json");
-
-        if (secretFile.exists()) {
-            log.info("Loading Firebase credentials from Render secret file");
-            serviceAccountStream = new FileInputStream(secretFile);
-        } else if (serviceAccountJson != null && !serviceAccountJson.isBlank()) {
-            log.info("Loading Firebase credentials from environment variable");
-            serviceAccountStream = new ByteArrayInputStream(serviceAccountJson.getBytes(StandardCharsets.UTF_8));
+        FirebaseOptions options;
+        try (InputStream serviceAccountStream = openServiceAccountStream()) {
+            options = FirebaseOptions.builder()
+                    .setCredentials(GoogleCredentials.fromStream(serviceAccountStream))
+                    .setStorageBucket(storageBucket)
+                    .build();
+        } catch (IOException e) {
+            throw new IOException(
+                    "Failed to load Firebase credentials. Set FIREBASE_SERVICE_ACCOUNT to valid service-account JSON "
+                            + "or to a readable credentials file path, or provide /etc/secrets/firebase.json.",
+                    e);
         }
-
-        if (serviceAccountStream == null) {
-            throw new IllegalStateException(
-                    "Firebase credentials not found. Provide either a Render secret file or FIREBASE_SERVICE_ACCOUNT env var.");
-        }
-
-        FirebaseOptions options = FirebaseOptions.builder()
-                .setCredentials(GoogleCredentials.fromStream(serviceAccountStream))
-                .setStorageBucket(storageBucket)
-                .build();
 
         FirebaseApp.initializeApp(options);
         log.info("Firebase initialized successfully with bucket: {}", storageBucket);
+    }
+
+    private InputStream openServiceAccountStream() throws IOException {
+        File secretFile = new File("/etc/secrets/firebase.json");
+
+        if (secretFile.isFile()) {
+            log.info("Loading Firebase credentials from Render secret file");
+            return new FileInputStream(secretFile);
+        }
+
+        if (serviceAccountJson == null || serviceAccountJson.isBlank()) {
+            throw new IllegalStateException(
+                    "Firebase credentials not found. Provide /etc/secrets/firebase.json or set FIREBASE_SERVICE_ACCOUNT "
+                            + "to valid service-account JSON or a readable credentials file path.");
+        }
+
+        String trimmed = serviceAccountJson.trim();
+        if (looksLikeJson(trimmed)) {
+            log.info("Loading Firebase credentials from FIREBASE_SERVICE_ACCOUNT JSON");
+        } else {
+            log.info("Loading Firebase credentials from FIREBASE_SERVICE_ACCOUNT file path");
+        }
+
+        return configuredServiceAccountStream(serviceAccountJson)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Firebase credentials not found. Set FIREBASE_SERVICE_ACCOUNT to valid service-account JSON "
+                                + "or a readable credentials file path."));
+    }
+
+    static Optional<InputStream> configuredServiceAccountStream(String configuredValue) throws IOException {
+        if (configuredValue == null || configuredValue.isBlank()) {
+            return Optional.empty();
+        }
+
+        String trimmed = configuredValue.trim();
+        if (looksLikeJson(trimmed)) {
+            return Optional.of(new ByteArrayInputStream(trimmed.getBytes(StandardCharsets.UTF_8)));
+        }
+
+        File credentialsFile = new File(trimmed);
+        if (!credentialsFile.isFile()) {
+            throw new IllegalStateException(
+                    "FIREBASE_SERVICE_ACCOUNT is not JSON and does not point to a readable credentials file.");
+        }
+
+        return Optional.of(new FileInputStream(credentialsFile));
+    }
+
+    private static boolean looksLikeJson(String value) {
+        return value.startsWith("{");
     }
 
     @Bean
