@@ -125,7 +125,8 @@ CREATE TABLE summary_report (
     analysis_status analysis_status DEFAULT 'PENDING',
     
     generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    model_version VARCHAR(50)
+    model_version VARCHAR(50),
+    report_url TEXT
 );
 
 -- Audit Logs

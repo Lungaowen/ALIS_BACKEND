@@ -4,6 +4,28 @@ ALIS is a Spring Boot backend for legal document upload, compliance analysis, re
 
 This README describes the functions that are working in the current codebase.
 
+## Modular monolith layout
+
+The backend is a **single Spring Boot process** split into Maven modules:
+
+| Module | Role |
+|--------|------|
+| `alis-core` | Shared entities, DTOs, enums, projections, queries, ports |
+| `alis-user` | User profiles, registration, admin client management |
+| `alis-auth` | JWT login/register, security filter chain |
+| `alis-ai` | Groq analysis and text extraction (no DB orchestration) |
+| `alis-legal` | Documents, compliance, law rules, reports, audit, Firebase |
+| `alis-api` | Application entry point, datasource, cross-cutting config |
+
+Build and run from the repository root:
+
+```bash
+mvn clean install
+java -jar alis-api/target/alis-api-0.0.1-SNAPSHOT.jar
+```
+
+Module toggles (optional isolation): `alis.modules.user.enabled`, `alis.modules.auth.enabled`, `alis.modules.ai.enabled`, `alis.modules.legal.enabled` in `alis-api/src/main/resources/application.properties`.
+
 ## Stack
 
 - Java 21

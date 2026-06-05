@@ -1,0 +1,80 @@
+services:
+  - type: web
+    name: alis-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter          # upgrade to standard for production load
+    region: frankfurt      # closest to ZA; switch to oregon if your users are US-based
+
+    # Render injects PORT automatically — the app reads it via ${PORT:8081}
+    # Do NOT hardcode a port here.
+
+    healthCheckPath: /health
+
+    envVars:
+      # ── Spring profile ──────────────────────────────────────────────
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod            # disables EnvConfig (.env loader) on Render
+
+      # ── Database (Supabase) ─────────────────────────────────────────
+      - key: DB_URL
+        sync: false            # set manually in Render dashboard
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+
+      # ── Firebase ────────────────────────────────────────────────────
+      # Option A: paste the full JSON as an env var (simpler)
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false
+      # Option B: upload firebase.json as a Render Secret File at /etc/secrets/firebase.json
+      #           and leave FIREBASE_SERVICE_ACCOUNT blank — FirebaseConfig checks that path first.
+      - key: FIREBASE_BUCKET_NAME
+        sync: false
+
+      # ── AI ──────────────────────────────────────────────────────────
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+
+      # ── Security ────────────────────────────────────────────────────
+      # ── Admin seed ──────────────────────────────────────────────────
+      - key: ALIS_JWT_SECRET
+        sync: false
+      - key: ALIS_JWT_EXPIRATION
+        value: "86400000"
+
+      - key: ALIS_SEED_ADMIN_EMAIL
+        sync: false
+      - key: ALIS_SEED_ADMIN_PASSWORD
+        sync: false
+      - key: ALIS_SEED_ADMIN_NAME
+        value: "System Admin"
+
+      # ── CORS — replace with your real frontend URL ──────────────────
+      # Report PDF storage (S3)
+      - key: ALIS_REPORTS_S3_ENABLED
+        value: "false"
+      - key: ALIS_REPORTS_S3_BUCKET
+        sync: false
+      - key: ALIS_REPORTS_S3_REGION
+        sync: false
+      - key: ALIS_REPORTS_S3_PREFIX
+        value: "reports"
+      - key: ALIS_REPORTS_S3_SIGNED_URL_MINUTES
+        value: "60"
+      - key: ALIS_REPORTS_S3_ACCESS_KEY_ID
+        sync: false
+      - key: ALIS_REPORTS_S3_SECRET_ACCESS_KEY
+        sync: false
+
+      - key: ALIS_CORS_ALLOWED_ORIGIN_PATTERNS
+        value: "*"   # CHANGE THIS
+
+      # ── JPA ─────────────────────────────────────────────────────────
+      - key: DDL_MODE
+        value: update          # switch to validate once schema is stable
+      - key: JPA_SHOW_SQL
+        value: "false"
