@@ -22,18 +22,34 @@ public class JwtUtil {
         @Value("${alis.jwt.secret}") String secret,
         @Value("${alis.jwt.expiration:86400000}") long expirationMs
     ) {
-        // IMPORTANT: DO NOT enforce 32 bytes for Supabase compatibility
-        this.key = Keys.hmacShaKeyFor(secret.getBytes());
+        byte[] keyBytes = secret.getBytes();
+        if (keyBytes.length < 32) {
+            throw new IllegalArgumentException(
+                "JWT secret must be at least 32 bytes. Current length: " + keyBytes.length
+            );
+        }
+        this.key = Keys.hmacShaKeyFor(keyBytes);
         this.expirationMs = expirationMs;
     }
 
-    public String generateToken(String subjectId, String role) {
+    /**
+     * Generates a JWT compatible with both Spring Security and Supabase PostgREST.
+     *
+     * PostgREST reads:
+     *   - "role"     → maps to a PostgreSQL role (use "authenticated" for RLS)
+     *   - "sub"      → the user ID
+     *
+     * Your app reads:
+     *   - "app_role" → your business role (ADMIN, LEGAL_PRACTITIONER, etc.)
+     */
+    public String generateToken(String subjectId, String appRole) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + expirationMs);
 
         return Jwts.builder()
                 .setSubject(subjectId)
-                .claim("role", role)
+                .claim("role", "authenticated")   // PostgREST / RLS role
+                .claim("app_role", appRole)        // your Spring Security role
                 .setIssuedAt(now)
                 .setExpiration(expiry)
                 .signWith(key, SignatureAlgorithm.HS256)
