@@ -1,0 +1,35 @@
+name: Deploy ALIS Java Backend to AWS EC2
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: SSH Deploy to EC2
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            echo "📦 Pulling latest code..."
+            cd /opt/alis-java
+            git pull origin main
+
+            echo "🐳 Rebuilding and restarting..."
+            sudo docker compose down
+            sudo docker compose up -d --build --remove-orphans
+            sudo docker image prune -f
+
+            echo "✅ Deployment complete."
+            sudo docker compose ps

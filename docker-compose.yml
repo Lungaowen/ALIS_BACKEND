@@ -1,0 +1,37 @@
+version: "3.9"
+
+services:
+  alis-java:
+    build: .
+    image: alis-backend:latest
+    container_name: alis-java
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: ${DB_URL}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      ALIS_JWT_SECRET: ${ALIS_JWT_SECRET}
+      ALIS_FIREBASE_ENABLED: ${ALIS_FIREBASE_ENABLED:-true}
+      FIREBASE_BUCKET_NAME: ${FIREBASE_BUCKET_NAME}
+      FIREBASE_SERVICE_ACCOUNT: /app/config/firebase-service-account.json
+      ALIS_AI_GROQ_KEY: ${ALIS_AI_GROQ_KEY}
+      ALIS_AI_GROQ_MODEL: ${ALIS_AI_GROQ_MODEL:-llama-3.3-70b-versatile}
+      ALIS_REPORTS_S3_ENABLED: ${ALIS_REPORTS_S3_ENABLED:-true}
+      ALIS_REPORTS_S3_BUCKET: ${ALIS_REPORTS_S3_BUCKET}
+      ALIS_REPORTS_S3_REGION: ${ALIS_REPORTS_S3_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      ALIS_CORS_ALLOWED_ORIGIN_PATTERNS: ${ALIS_CORS_ALLOWED_ORIGIN_PATTERNS:-*}
+      ALIS_SEED_ADMIN_EMAIL: ${ALIS_SEED_ADMIN_EMAIL}
+      ALIS_SEED_ADMIN_NAME: ${ALIS_SEED_ADMIN_NAME}
+    volumes:
+      - ./config/firebase-service-account.json:/app/config/firebase-service-account.json:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
