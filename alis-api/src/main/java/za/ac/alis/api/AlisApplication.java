@@ -21,6 +21,7 @@ public class AlisApplication {
 
     public static void main(String[] args) {
         LocalDotenvLoader.load();
+        LocalDotenvLoader.validateRequiredConfiguration(args);
         SpringApplication.run(AlisApplication.class, args);
     }
 }

@@ -384,28 +384,47 @@ Optional but strongly recommended:
 
 ## Local Run
 
-### 1. Run tests
+### 1. Create local environment config
+
+Copy `config/.env.example` to `config/.env`, then replace the database and secret values:
+
+```bash
+cp config/.env.example config/.env
+```
+
+At minimum, local boot needs:
+
+- `DB_URL` as a PostgreSQL JDBC URL, for example `jdbc:postgresql://host:5432/postgres?sslmode=require`
+- `DB_USERNAME`
+- `DB_PASSWORD`
+- `ALIS_JWT_SECRET` with at least 32 bytes
+
+The app reads dotenv values from `config/.env`. The real config file is ignored by Git, so you can copy the same `config` folder to EC2 without pushing secrets to GitHub. Render should use dashboard environment variables instead of a checked-in config file.
+
+### 2. Run tests
 
 ```bash
 mvn test
 ```
 
-### 2. Start the app
+### 3. Start the app from the repository root
 
 ```bash
-mvn spring-boot:run
+mvn -pl alis-api spring-boot:run
 ```
 
-### 3. Or run the packaged jar
+### 4. Or run the packaged jar
 
 ```bash
 mvn -DskipTests package
-java -jar target/demo-0.0.1-SNAPSHOT.jar
+java -jar alis-api/target/alis-api-0.0.1-SNAPSHOT.jar
 ```
 
 ## Render Deployment
 
 The project includes a Dockerfile and is suitable for Render deployment.
+
+On Render, configure the variables below in the Render dashboard. The app also supports `config/.env` for local and EC2 deployments, but Render normally injects these values as environment variables.
 
 Recommended Render env vars:
 
@@ -426,6 +445,17 @@ Recommended Render env vars:
 Recommended health check path:
 
 - `/health`
+
+## EC2 Deployment Config
+
+For EC2, copy your local ignored `config` folder beside the application:
+
+```bash
+config/.env
+config/firebase-service-account.json
+```
+
+Run the JAR from the repository/application directory so the app can find `config/.env`, or set the same values as environment variables in your service manager.
 
 ## Notes and Current Limits
 

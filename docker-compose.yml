@@ -1,21 +1,19 @@
 version: "3.9"
 
-# ─────────────────────────────────────────────────────────────────────────────
-# ALIS Java Backend — Local Docker Compose
+# ALIS Java Backend - Local Docker Compose
 #
 # Prerequisites:
-#   1. .env file in this directory (copy from .env.example and fill in values)
-#   2. Firebase key at alis-api/src/main/resources/firebase-service-account.json
+#   1. config/.env file (copy from config/.env.example and fill in values)
+#   2. Optional Firebase key at config/firebase-service-account.json
 #
 # Run:
 #   docker compose up --build
 #
-# Swagger UI (once running):
-#   http://localhost:8080/swagger-ui/index.html  (uses dev profile)
+# Swagger UI:
+#   http://localhost:8080/swagger-ui/index.html
 #
 # Health check:
 #   http://localhost:8080/health
-# ─────────────────────────────────────────────────────────────────────────────
 
 services:
   alis-java:
@@ -28,57 +26,17 @@ services:
     ports:
       - "8080:8080"
 
-    # Load all vars from .env automatically
     env_file:
-      - .env
+      - ./config/.env
 
     environment:
-      # Use dev profile locally — enables Swagger, verbose SQL, relaxed CORS
       SPRING_PROFILES_ACTIVE: dev
-
-      # Database — read from .env
-      DB_URL: ${DB_URL}
-      DB_USERNAME: ${DB_USERNAME}
-      DB_PASSWORD: ${DB_PASSWORD}
-
-      # JWT
-      ALIS_JWT_SECRET: ${ALIS_JWT_SECRET}
-      ALIS_JWT_EXPIRATION: ${ALIS_JWT_EXPIRATION:-86400000}
-
-      # Firebase — point to the mounted key file
-      ALIS_FIREBASE_ENABLED: ${ALIS_FIREBASE_ENABLED:-true}
-      FIREBASE_BUCKET_NAME: ${FIREBASE_BUCKET_NAME:-}
       FIREBASE_SERVICE_ACCOUNT: /app/config/firebase-service-account.json
-
-      # Groq AI
-      ALIS_AI_GROQ_KEY: ${ALIS_AI_GROQ_KEY:-}
-      GROQ_API_KEY: ${GROQ_API_KEY:-}
-      ALIS_AI_GROQ_MODEL: ${ALIS_AI_GROQ_MODEL:-llama-3.3-70b-versatile}
-
-      # Admin seed
-      ALIS_SEED_ADMIN_EMAIL: ${ALIS_SEED_ADMIN_EMAIL:-admin@alis.local}
-      ALIS_SEED_ADMIN_NAME: ${ALIS_SEED_ADMIN_NAME:-System Admin}
-      ALIS_SEED_ADMIN_PASSWORD: ${ALIS_SEED_ADMIN_PASSWORD:-admin123}
-
-      # CORS — open for local frontend
       ALIS_CORS_ALLOWED_ORIGIN_PATTERNS: "*"
-
-      # S3 report storage — disabled locally, Python Firebase handles this
-      ALIS_REPORTS_S3_ENABLED: "false"
-      ALIS_REPORTS_S3_BUCKET: ${ALIS_REPORTS_S3_BUCKET:-}
-      ALIS_REPORTS_S3_REGION: ${ALIS_REPORTS_S3_REGION:-us-east-1}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
-
-      # Schema — use none locally (Python manages schema via Supabase)
-      DDL_MODE: none
-
-      # Port
       PORT: 8080
 
     volumes:
-      # Mount Firebase key from source tree — no need to copy it anywhere
-      - ./alis-api/src/main/resources/firebase-service-account.json:/app/config/firebase-service-account.json:ro
+      - ./config/firebase-service-account.json:/app/config/firebase-service-account.json:ro
 
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
