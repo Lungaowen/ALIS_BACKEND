@@ -1,4 +1,4 @@
 -------------------------------------------------------------------------------
 Test set: za.ac.alis.auth.security.JwtUtilTests
 -------------------------------------------------------------------------------
-Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.056 s -- in za.ac.alis.auth.security.JwtUtilTests
+Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.733 s -- in za.ac.alis.auth.security.JwtUtilTests

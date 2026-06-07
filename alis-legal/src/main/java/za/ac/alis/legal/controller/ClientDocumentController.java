@@ -2,6 +2,7 @@ package za.ac.alis.legal.controller;
 
 import java.io.IOException;
 import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
@@ -78,7 +79,7 @@ public class ClientDocumentController {
         throw new IllegalStateException("Not authenticated");
     }
 
-    // ── Create ────────────────────────────────────────────────────────────────
+    // ── Upload ────────────────────────────────────────────────────────────────
     @PostMapping(value = "/documents/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<Map<String, Object>> uploadDocument(
             @RequestParam("file") MultipartFile file) throws Exception {
@@ -95,18 +96,18 @@ public class ClientDocumentController {
         ));
     }
 
-    // ── Read (list) ───────────────────────────────────────────────────────────
+    // ── List own documents (with latest report data) ──────────────────────────
     @GetMapping("/documents")
     public ResponseEntity<List<DocumentResponseDTO>> getMyDocuments() {
         Long clientId = getAuthenticatedClientId();
         List<DocumentResponseDTO> docs = documentService.getDocumentsByClientId(clientId)
                 .stream()
-                .map(this::toDTO)
+                .map(d -> toDTOWithReport(d, clientId))
                 .toList();
         return ResponseEntity.ok(docs);
     }
 
-    // ── Read (single) ─────────────────────────────────────────────────────────
+    // ── Single document ───────────────────────────────────────────────────────
     @GetMapping("/documents/{id}")
     public ResponseEntity<DocumentResponseDTO> getDocument(@PathVariable Long id) {
         Long clientId = getAuthenticatedClientId();
@@ -115,10 +116,10 @@ public class ClientDocumentController {
         if (!doc.getClient().getClientId().equals(clientId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         }
-        return ResponseEntity.ok(toDTO(doc));
+        return ResponseEntity.ok(toDTOWithReport(doc, clientId));
     }
 
-    // ── Read (reports for a document) ─────────────────────────────────────────
+    // ── Reports for a document ────────────────────────────────────────────────
     @GetMapping("/documents/{documentId}/reports")
     public ResponseEntity<List<ReportInfoDTO>> getReportsForDocument(
             @PathVariable Long documentId) {
@@ -137,17 +138,16 @@ public class ClientDocumentController {
         return ResponseEntity.ok(dtos);
     }
 
-    // ── Update (metadata only — title) ────────────────────────────────────────
+    // ── Update title ──────────────────────────────────────────────────────────
     @PatchMapping("/documents/{id}")
     public ResponseEntity<DocumentResponseDTO> updateMyDocument(
             @PathVariable Long id,
             @RequestBody DocumentUpdateRequest request) {
 
         Long clientId = getAuthenticatedClientId();
-
         try {
             Document updated = documentService.updateDocument(id, clientId, request.getTitle());
-            return ResponseEntity.ok(toDTO(updated));
+            return ResponseEntity.ok(toDTOWithReport(updated, clientId));
         } catch (SecurityException e) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, e.getMessage());
         } catch (RuntimeException e) {
@@ -159,19 +159,16 @@ public class ClientDocumentController {
     @DeleteMapping("/documents/{id}")
     public ResponseEntity<Map<String, String>> deleteMyDocument(@PathVariable Long id) {
         Long clientId = getAuthenticatedClientId();
-
         Document doc = documentService.getDocumentById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Document not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Document not found"));
         if (!doc.getClient().getClientId().equals(clientId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not your document");
         }
-
         documentService.deleteDocument(id);
         return ResponseEntity.ok(Map.of("message", "Document deleted successfully"));
     }
 
-    // ── View (inline browser preview) ─────────────────────────────────────────
+    // ── View (inline) ─────────────────────────────────────────────────────────
     @GetMapping("/documents/{id}/view")
     public void viewDocument(@PathVariable Long id, HttpServletResponse response)
             throws IOException {
@@ -183,20 +180,17 @@ public class ClientDocumentController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         }
         if (doc.getFilePath() == null || doc.getFilePath().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
-                    "No file attached to this document");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No file attached");
         }
-
-        byte[] fileBytes = firebaseStorageService.downloadFile(doc.getFilePath());
+        byte[] bytes = firebaseStorageService.downloadFile(doc.getFilePath());
         response.setContentType(MediaType.APPLICATION_PDF_VALUE);
-        response.setHeader(HttpHeaders.CONTENT_DISPOSITION,
-                "inline; filename=\"" + doc.getTitle() + "\"");
-        response.setContentLength(fileBytes.length);
-        response.getOutputStream().write(fileBytes);
+        response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + doc.getTitle() + "\"");
+        response.setContentLength(bytes.length);
+        response.getOutputStream().write(bytes);
         response.getOutputStream().flush();
     }
 
-    // ── Download (force save-dialog) ──────────────────────────────────────────
+    // ── Download (force save) ─────────────────────────────────────────────────
     @GetMapping("/documents/{id}/download")
     public void downloadDocument(@PathVariable Long id, HttpServletResponse response)
             throws IOException {
@@ -208,21 +202,18 @@ public class ClientDocumentController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         }
         if (doc.getFilePath() == null || doc.getFilePath().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
-                    "No file attached to this document");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No file attached");
         }
-
-        byte[] fileBytes = firebaseStorageService.downloadFile(doc.getFilePath());
-        String fileName  = doc.getTitle() != null ? doc.getTitle() : "document_" + id;
+        byte[] bytes = firebaseStorageService.downloadFile(doc.getFilePath());
+        String name  = doc.getTitle() != null ? doc.getTitle() : "document_" + id;
         response.setContentType(MediaType.APPLICATION_OCTET_STREAM_VALUE);
-        response.setHeader(HttpHeaders.CONTENT_DISPOSITION,
-                "attachment; filename=\"" + fileName + "\"");
-        response.setContentLength(fileBytes.length);
-        response.getOutputStream().write(fileBytes);
+        response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + name + "\"");
+        response.setContentLength(bytes.length);
+        response.getOutputStream().write(bytes);
         response.getOutputStream().flush();
     }
 
-    // ── Report download ───────────────────────────────────────────────────────
+    // ── Report PDF download ───────────────────────────────────────────────────
     @GetMapping("/reports/{reportId}/download")
     @Transactional
     public void downloadReport(@PathVariable Long reportId, HttpServletResponse response)
@@ -236,6 +227,12 @@ public class ClientDocumentController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not your report");
         }
 
+        // Serve Firebase PDF if available, otherwise generate
+        if (report.getReportUrl() != null && !report.getReportUrl().isBlank()) {
+            response.sendRedirect(report.getReportUrl());
+            return;
+        }
+
         byte[] pdfBytes = pdfReportService.generateComplianceReportPdf(report);
         response.setContentType(MediaType.APPLICATION_PDF_VALUE);
         response.setHeader(HttpHeaders.CONTENT_DISPOSITION,
@@ -245,7 +242,7 @@ public class ClientDocumentController {
         response.getOutputStream().flush();
     }
 
-    // ── DTO mapper ────────────────────────────────────────────────────────────
+    // ── Report download URL ───────────────────────────────────────────────────
     @GetMapping("/reports/{reportId}/download-url")
     @Transactional
     public ResponseEntity<ReportDownloadUrlDTO> getReportDownloadUrl(@PathVariable Long reportId)
@@ -264,6 +261,34 @@ public class ClientDocumentController {
         } catch (IllegalStateException e) {
             throw new ResponseStatusException(HttpStatus.NOT_IMPLEMENTED, e.getMessage(), e);
         }
+    }
+
+    // ── DTO mappers ───────────────────────────────────────────────────────────
+
+    /**
+     * Maps a Document to DTO enriched with latest summary_report data.
+     * Uses a separate query per document — acceptable for typical list sizes.
+     */
+    private DocumentResponseDTO toDTOWithReport(Document d, Long clientId) {
+        DocumentResponseDTO dto = toDTO(d);
+
+        // Fetch latest report for this document
+        List<SummaryReport> reports = summaryReportRepository
+                .findByDocumentDocumentId(d.getDocumentId());
+
+        if (reports != null && !reports.isEmpty()) {
+            SummaryReport latest = reports.stream()
+                    .max(Comparator.comparing(SummaryReport::getGeneratedAt))
+                    .orElse(null);
+            if (latest != null) {
+                dto.setReportId(latest.getReportId());
+                dto.setRiskLevel(latest.getRiskLevel() != null
+                        ? latest.getRiskLevel().name() : null);
+                dto.setSimilarityScore(latest.getSimilarityScore() != null
+                        ? latest.getSimilarityScore().doubleValue() : null);
+            }
+        }
+        return dto;
     }
 
     private DocumentResponseDTO toDTO(Document d) {

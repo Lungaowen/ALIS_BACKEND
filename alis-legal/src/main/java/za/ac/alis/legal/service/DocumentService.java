@@ -33,18 +33,17 @@ import za.ac.alis.core.util.FilenameSanitizer;
 public class DocumentService {
 
     private static final Logger log            = LoggerFactory.getLogger(DocumentService.class);
-    private static final long   MAX_FILE_BYTES = 10L * 1024 * 1024; // 10 MB
+    private static final long   MAX_FILE_BYTES = 50L * 1024 * 1024; // 50 MB — match Python gateway
 
-    private final DocumentRepository        documentRepository;
-    private final ClientRepository          clientRepository;
-    private final FileMetadataRepository    fileMetadataRepository;
-    private final DocumentContentRepository documentContentRepository;
-    private final FirebaseStorageService    firebaseStorageService;
-    private final NotificationWebSocketService notificationWebSocketService;
-    private final DocumentTextIndexingService documentTextIndexingService;
-
-    private final SummaryReportRepository   summaryReportRepository;
-    private final AuditLogRepository        auditLogRepository;
+    private final DocumentRepository            documentRepository;
+    private final ClientRepository              clientRepository;
+    private final FileMetadataRepository        fileMetadataRepository;
+    private final DocumentContentRepository     documentContentRepository;
+    private final FirebaseStorageService        firebaseStorageService;
+    private final NotificationWebSocketService  notificationWebSocketService;
+    private final DocumentTextIndexingService   documentTextIndexingService;
+    private final SummaryReportRepository       summaryReportRepository;
+    private final AuditLogRepository            auditLogRepository;
 
     public DocumentService(DocumentRepository documentRepository,
                            ClientRepository clientRepository,
@@ -55,18 +54,20 @@ public class DocumentService {
                            DocumentTextIndexingService documentTextIndexingService,
                            SummaryReportRepository summaryReportRepository,
                            AuditLogRepository auditLogRepository) {
-        this.documentRepository        = documentRepository;
-        this.clientRepository          = clientRepository;
-        this.fileMetadataRepository    = fileMetadataRepository;
-        this.documentContentRepository = documentContentRepository;
-        this.firebaseStorageService    = firebaseStorageService;
+        this.documentRepository           = documentRepository;
+        this.clientRepository             = clientRepository;
+        this.fileMetadataRepository       = fileMetadataRepository;
+        this.documentContentRepository    = documentContentRepository;
+        this.firebaseStorageService       = firebaseStorageService;
         this.notificationWebSocketService = notificationWebSocketService;
-        this.documentTextIndexingService = documentTextIndexingService;
-        this.summaryReportRepository   = summaryReportRepository;
-        this.auditLogRepository        = auditLogRepository;
+        this.documentTextIndexingService  = documentTextIndexingService;
+        this.summaryReportRepository      = summaryReportRepository;
+        this.auditLogRepository           = auditLogRepository;
     }
 
-    // ── Create (Upload) ───────────────────────────────────────────────────────
+    // ── Upload (Java-side) ────────────────────────────────────────────────────
+    // Used by ClientDocumentController and DocumentController.
+    // Uploads the file to Firebase and creates the document row.
     @Transactional
     public Document uploadDocument(MultipartFile file, Long clientId) throws Exception {
 
@@ -74,7 +75,7 @@ public class DocumentService {
             throw new IllegalArgumentException("File is empty");
         }
         if (file.getSize() > MAX_FILE_BYTES) {
-            throw new IllegalArgumentException("File exceeds maximum size of 10 MB");
+            throw new IllegalArgumentException("File exceeds maximum size of 50 MB");
         }
 
         String mimeType     = file.getContentType();
@@ -83,6 +84,7 @@ public class DocumentService {
         Client client = clientRepository.findById(clientId)
                 .orElseThrow(() -> new RuntimeException("Client not found: " + clientId));
 
+        // Duplicate detection
         String hash;
         try (InputStream is = file.getInputStream()) {
             hash = computeSha256(is);
@@ -92,29 +94,32 @@ public class DocumentService {
                     "Duplicate file detected. This document has already been uploaded.");
         }
 
+        // Create document row immediately so listing works before Firebase completes
         Document doc = new Document();
         doc.setTitle(safeFilename);
         doc.setClient(client);
         doc.setUploadedAt(LocalDateTime.now());
         doc.setStatus(DocumentStat.PENDING);
-        doc.setIngestionSource(IngestionSource.MANUAL);
+        doc.setIngestionSource(IngestionSource.UPLOAD); // was MANUAL — corrected
         Document savedDoc = documentRepository.saveAndFlush(doc);
         log.info("Created Document ID={} for client={}", savedDoc.getDocumentId(), clientId);
 
+        // Upload to Firebase
         FirebaseStorageService.StorageResult upload;
         try (InputStream is = file.getInputStream()) {
             upload = firebaseStorageService.uploadFile(is, safeFilename, mimeType, clientId);
         } catch (Exception e) {
             log.error("Firebase upload failed for Document ID={}", savedDoc.getDocumentId(), e);
             savedDoc.setStatus(DocumentStat.FAILED);
-            documentRepository.saveAndFlush(doc);
+            documentRepository.saveAndFlush(savedDoc);
             throw new RuntimeException("Failed to upload file to cloud storage", e);
         }
 
         savedDoc.setFilePath(upload.getObjectPath());
         savedDoc.setFileUrl(upload.getSignedUrl());
-        documentRepository.saveAndFlush(doc);
+        documentRepository.saveAndFlush(savedDoc);
 
+        // File metadata
         FileMetadata meta = new FileMetadata();
         meta.setDocument(savedDoc);
         meta.setMimeType(mimeType);
@@ -123,6 +128,7 @@ public class DocumentService {
         meta.setUploadedAt(LocalDateTime.now());
         fileMetadataRepository.save(meta);
 
+        // Document content placeholder
         DocumentContent content = new DocumentContent();
         content.setDocument(savedDoc);
         documentContentRepository.save(content);
@@ -151,13 +157,11 @@ public class DocumentService {
 
     // ── Read ──────────────────────────────────────────────────────────────────
     public Optional<Document> getDocumentById(Long id) {
-        // Eagerly load Client to avoid LazyInitializationException
         Document doc = documentRepository.findByIdWithClient(id);
         return Optional.ofNullable(doc);
     }
 
     public List<Document> getDocumentsByClientId(Long clientId) {
-        // Use JOIN FETCH to eagerly load Client relationship
         return documentRepository.findDocumentsByClientWithClient(clientId);
     }
 
