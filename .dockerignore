@@ -1,0 +1,32 @@
+# Secrets - never send to Docker build context
+config/
+firebase-service-account.json
+*.env
+
+# Build artifacts (rebuilt inside the image anyway)
+target/
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Logs
+*.log
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docs / misc (not needed inside the image)
+*.md
+frontend-api/
+.github/

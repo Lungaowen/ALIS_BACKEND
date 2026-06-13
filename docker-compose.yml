@@ -1,0 +1,13 @@
+services:
+  java-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: alis-java:latest
+    env_file:
+      - config/.env
+    volumes:
+      - ./config/firebase-service-account.json:/app/config/firebase-service-account.json:ro
+    ports:
+      - "8080:8080"
+    restart: unless-stopped

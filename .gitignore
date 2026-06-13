@@ -1,0 +1,25 @@
+# Sensitive files
+config/
+firebase-service-account.json
+*.env
+
+# Build artifacts
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# Logs (incl. JVM crash logs like hs_err_pid*.log, replay_pid*.log)
+*.log
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
