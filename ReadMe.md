@@ -1,427 +1,330 @@
 # ALIS Backend
 
-ALIS is a Spring Boot backend for legal document upload, compliance analysis, reporting, and admin management.
-
-This README describes the functions that are working in the current codebase.
-
-## Stack
-
-- Java 21
-- Spring Boot 3.3.4
-- Spring Security
-- Spring Data JPA / Hibernate
-- PostgreSQL / Supabase
-- Firebase Storage
-- Groq API for AI analysis
-- OpenPDF for report PDFs
-
-## Base URLs
-
-- Local: `http://localhost:8081`
-- Health: `http://localhost:8081/health`
-- Root: `http://localhost:8081/`
-
-`server.port` defaults to `8081` locally and can be overridden with `PORT`.
-
-## Working Functions
-
-### Authentication
-
-- User login
-- Admin login
-- Public registration for:
-  - `USER`
-  - `DEAL_MAKER`
-  - `LEGAL_PRACTITIONER`
-- JWT token generation and validation
-
-### User Self-Service
-
-Authenticated `USER`, `DEAL_MAKER`, and `LEGAL_PRACTITIONER` accounts can:
-
-- update their own full name
-- update their own username
-- change their own password by providing `currentPassword` and `newPassword`
-
-### Admin Functions
-
-Authenticated `ADMIN` can:
-
-- view the admin dashboard
-- view audit logs
-- list clients
-- filter clients
-- update client details
-- delete a client
-- view role distribution, registration trend, top uploaders, and inactive clients
-
-The admin delete flow now removes the user's related documents, report records, file-linked data, and audit log rows before deleting the client record.
-
-### Client Document Functions
-
-Authenticated `USER`, `DEAL_MAKER`, and `LEGAL_PRACTITIONER` can:
-
-- upload documents
-- list their own documents
-- fetch a single owned document
-- fetch reports for an owned document
-- download owned report PDFs
-
-### Compliance Functions
-
-Authenticated users can:
-
-- trigger or re-trigger compliance analysis
-- poll compliance status
-- fetch the final compliance result for a document
-
-### Reports
-
-Authenticated users or admins can fetch:
-
-- report by report ID
-- reports by document ID
-- reports by client ID
-- report PDF download
-
-### Legal Practitioner Rule Management
-
-Authenticated `LEGAL_PRACTITIONER` users can:
-
-- list rules
-- view one rule
-- create rules
-- update rules
-- delete rules
-
-### Specialist Account APIs
-
-Authenticated requests can also create:
-
-- legal practitioners
-- deal makers
-
-These endpoints exist separately from `/api/auth/register`.
-
-### Storage and Processing
-
-- Firebase file upload is working
-- duplicate-file detection is working
-- document metadata persistence is working
-- PDF report generation is wired
-- AI analysis and copilot chat use Groq directly from the backend
-- document upload automatically starts the Groq compliance pipeline
-- app startup does not require `GROQ_API_KEY`, but live AI analysis does
-
-## Roles
-
-### `ADMIN`
-
-- `/api/admin/**`
-- full client management
-- dashboard and audit access
-
-### `USER`
-
-- register and log in
-- upload documents
-- run compliance analysis
-- view reports
-- update own profile
-
-### `DEAL_MAKER`
-
-- register and log in
-- upload documents
-- run compliance analysis
-- view reports
-- update own profile
-- cannot manage rules
-
-### `LEGAL_PRACTITIONER`
-
-- register and log in
-- upload documents
-- run compliance analysis
-- view reports
-- update own profile
-- can CRUD rules
-
-## Security Rules
-
-- Public:
-  - `GET /`
-  - `GET /health`
-  - `POST /api/auth/login`
-  - `POST /api/auth/register`
-- Admin only:
-  - `/api/admin/**`
-  - `/swagger-ui/**`
-  - `/v3/api-docs/**`
-- Client roles only:
-  - `/api/client/**`
-- Legal practitioner only:
-  - `/api/rules/**`
-- Everything else requires authentication
-
-## Main Endpoints
-
-### Health
-
-- `GET /`
-- `GET /health`
-
-### Auth
-
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-
-### Client Profile
-
-- `PUT /api/client/profile`
-
-### Admin
-
-- `GET /api/admin/dashboard`
-- `GET /api/admin/audit`
-- `GET /api/admin/audit/recent`
-- `GET /api/admin/audit/client/{clientId}`
-
-### Admin Client Management
-
-- `GET /api/admin/clients`
-- `GET /api/admin/clients/{id}`
-- `POST /api/admin/clients/filter`
-- `GET /api/admin/clients/by-role`
-- `GET /api/admin/clients/by-date`
-- `GET /api/admin/clients/{id}/document-count`
-- `PUT /api/admin/clients/{id}`
-- `DELETE /api/admin/clients/{id}`
-- `GET /api/admin/clients/reports/summary`
-- `GET /api/admin/clients/reports/role-distribution`
-- `GET /api/admin/clients/reports/registration-trend`
-- `GET /api/admin/clients/reports/top-uploaders`
-- `GET /api/admin/clients/reports/inactive`
-
-### Client Document APIs
-
-- `POST /api/client/documents/upload`
-- `GET /api/client/documents`
-- `GET /api/client/documents/{id}`
-- `GET /api/client/documents/{documentId}/reports`
-- `GET /api/client/reports/{reportId}/download`
-
-### Compliance
-
-- `POST /api/compliance/analyze/{documentId}`
-- `GET /api/compliance/status/{documentId}`
-- `GET /api/compliance/result/{documentId}`
-
-### Reports
-
-- `GET /api/reports/{reportId}`
-- `GET /api/reports/document/{documentId}`
-- `GET /api/reports/client/{clientId}`
-- `GET /api/reports/{reportId}/download-pdf`
-
-### Legal Practitioner Rules
-
-- `GET /api/rules`
-- `GET /api/rules/{id}`
-- `POST /api/rules`
-- `PUT /api/rules/{id}`
-- `DELETE /api/rules/{id}`
-
-### Specialist Account Controllers
-
-- `GET /api/legal-practitioners`
-- `GET /api/legal-practitioners/{id}`
-- `POST /api/legal-practitioners`
-- `GET /api/dealmakers`
-- `GET /api/dealmakers/{id}`
-- `POST /api/dealmakers`
-
-### General Document Controller
-
-These routes also exist and are useful for internal or admin-style flows:
-
-- `POST /api/documents/upload`
-- `GET /api/documents/{id}`
-- `GET /api/documents/client/{clientId}`
-- `GET /api/documents/all`
-- `DELETE /api/documents/{id}`
-- `GET /api/documents/{id}/download`
-
-### Test Upload Endpoint
-
-- `POST /api/test/upload`
-
-This is a lightweight testing endpoint and should not be treated as the primary app upload API.
-
-## Request Examples
-
-### Register a normal user
-
-```json
-POST /api/auth/register
-{
-  "fullName": "John Doe",
-  "email": "john@example.com",
-  "password": "securePassword123",
-  "role": "USER"
-}
+**Automated Legal Intelligence System (ALIS)** — a Spring Boot REST API that ingests legal documents, runs AI-powered rule extraction and compliance analysis, stores files in Firebase, and serves role-based dashboards for Admins, Legal Practitioners, Dealmakers, and Clients.
+
+> Repository: [`Lungaowen/ALIS_BACKEND`](https://github.com/Lungaowen/ALIS_BACKEND)
+
+---
+
+## Table of Contents
+1. [Tech Stack](#tech-stack)
+2. [Architecture Overview](#architecture-overview)
+3. [Project Structure](#project-structure)
+4. [Key Modules (Per-File Scan)](#key-modules-per-file-scan)
+5. [Getting Started](#getting-started)
+6. [Environment Variables](#environment-variables)
+7. [Running Locally](#running-locally)
+8. [Docker & Deployment](#docker--deployment)
+9. [API Documentation](#api-documentation)
+10. [Testing](#testing)
+11. [Security Notes](#security-notes)
+
+---
+
+## Tech Stack
+
+### Language & Runtime
+- **Java 21** (Eclipse Temurin)
+- **Maven** (wrapper included: `mvnw` / `mvnw.cmd`)
+
+### Frameworks & Core Libraries
+| Concern | Library | Version |
+|---|---|---|
+| Application framework | Spring Boot | 3.3.4 |
+| REST / MVC | `spring-boot-starter-web` | 3.3.4 |
+| Persistence | Spring Data JPA + Hibernate | 3.3.4 |
+| Security | Spring Security + JWT (`jjwt`) | 3.3.4 / 0.11.5 |
+| Real-time | Spring WebSocket (STOMP) | 3.3.4 |
+| API Docs | springdoc-openapi (Swagger UI) | 2.6.0 |
+| Lombok | `org.projectlombok:lombok` | (Spring-managed) |
+| Env loader (dev) | `io.github.cdimascio:java-dotenv` | 5.2.2 |
+
+### Databases
+- **PostgreSQL** (production / Supabase) — `org.postgresql:postgresql`
+- **H2** (in-memory, for local/dev/test) — `com.h2database:h2`
+
+### Document & File Processing
+- **Apache PDFBox** 2.0.30 — PDF text extraction
+- **OpenPDF** 3.0.3 — PDF generation
+- **Apache POI (`poi-ooxml`)** 5.2.5 — DOCX/XLSX parsing
+- **Firebase Admin SDK** 9.3.0 — Cloud Storage for uploaded documents
+
+### AI Integration
+- **Groq API** (OpenAI-compatible) — default model `llama-3.3-70b-versatile`
+- External **Python microservice** (URL configurable via `ALIS_PYTHON_SERVICE_API_URL`) for advanced rule extraction
+
+### DevOps
+- **Docker** (multi-stage build: Maven → JRE Alpine)
+- **docker-compose** (local orchestration)
+- **Render** (production hosting — `render.yaml` provided)
+
+### Frontend Helpers (bundled)
+- `frontend-api/alisApi.js` — JS client wrapper
+- `frontend-api/exampleUsage.jsx` — React example
+- `alis-api.json` — OpenAPI spec
+- `LOVABLE_API_BRIEF.md` — frontend integration brief
+
+---
+
+## Architecture Overview
+
+```
+                     ┌─────────────────────────┐
+                     │   Web / Mobile Client   │
+                     └────────────┬────────────┘
+                                  │ HTTPS + JWT
+                                  ▼
+         ┌────────────────────────────────────────────┐
+         │           Spring Boot REST API             │
+         │                                            │
+         │  Controllers ─► Services ─► Repositories   │
+         │       │             │             │        │
+         │       │             ▼             ▼        │
+         │       │      AI / Firebase /  PostgreSQL   │
+         │       │      Python service                │
+         │       ▼                                    │
+         │  WebSocket (STOMP) ── live audit log feed  │
+         └────────────────────────────────────────────┘
+                                  │
+                  ┌───────────────┼───────────────┐
+                  ▼               ▼               ▼
+              Postgres       Firebase         Groq AI /
+             (Supabase)      Storage         Python svc
 ```
 
-### Register a deal maker
+### Roles
+Defined in `enums/Role.java` — typically `ADMIN`, `LEGAL_PRACTITIONER`, `DEALMAKER`, `CLIENT`. Authorization is enforced through `JwtAuthenticationFilter` + Spring Security.
 
-```json
-POST /api/auth/register
-{
-  "fullName": "Anele Deal",
-  "email": "dealmaker@example.com",
-  "password": "DealPass!2026",
-  "role": "DEAL_MAKER",
-  "companyName": "Blue Horizon Capital",
-  "dealSpecialty": "SME acquisitions"
-}
+---
+
+## Project Structure
+
+```
+ALIS_BACKEND/
+├── Dockerfile                       # Multi-stage Maven → JRE build
+├── docker-compose.yml               # Local stack
+├── pom.xml                          # Maven dependencies
+├── mvnw / mvnw.cmd / .mvn/          # Maven wrapper
+├── alis-api.json                    # OpenAPI specification
+├── LOVABLE_API_BRIEF.md             # Frontend integration brief
+├── ReadMe.md / HELP.md              # Original docs
+├── frontend-api/                    # JS/React client samples
+│   ├── alisApi.js
+│   └── exampleUsage.jsx
+└── src/
+    ├── main/
+    │   ├── java/za/ac/alis/
+    │   │   ├── DemoApplication.java         # @SpringBootApplication entry
+    │   │   ├── ActiveProfiles.java          # Profile helper
+    │   │   ├── controller/                  # 14 REST controllers
+    │   │   ├── service/                     # Business logic (17 services)
+    │   │   ├── repo/                        # Spring Data JPA repositories
+    │   │   ├── entities/                    # JPA @Entity classes
+    │   │   ├── dto/                         # Request/response DTOs
+    │   │   ├── projections/                 # JPA interface projections
+    │   │   ├── queries/                     # Native/JPQL query constants
+    │   │   ├── enums/                       # Domain enums
+    │   │   ├── security/                    # JwtUtil, JwtAuthenticationFilter
+    │   │   ├── webSocket/                   # STOMP WebSocketConfig
+    │   │   └── utils/                       # File name helpers
+    │   └── resources/
+    │       ├── application.properties       # Base config
+    │       ├── application-dev.properties   # Dev profile
+    │       ├── application-prod.properties  # Prod profile
+    │       ├── application-test.properties  # Test profile
+    │       ├── render.yaml                  # Render deployment manifest
+    │       └── CPA_Act.pdf                  # Seed legal document
+    └── test/java/za/ac/alis/
+        ├── demo/DemoApplicationTests.java
+        ├── security/JwtUtilTests.java
+        └── service/                         # Service unit tests
 ```
 
-### Register a legal practitioner
+---
 
-```json
-POST /api/auth/register
-{
-  "fullName": "Lebo Practitioner",
-  "email": "legal@example.com",
-  "password": "LegalPass!2026",
-  "role": "LEGAL_PRACTITIONER",
-  "barNumber": "LP-2026-001",
-  "lawFirm": "Mokoena Legal"
-}
+## Key Modules (Per-File Scan)
+
+### Entry Point
+| File | Purpose |
+|---|---|
+| `DemoApplication.java` | `@SpringBootApplication` — bootstraps the Spring context |
+| `ActiveProfiles.java` | Utility for resolving the active Spring profile |
+
+### Controllers (`controller/`)
+| Controller | Responsibility |
+|---|---|
+| `AuthController` | Register, login, JWT issuance |
+| `AdminDashboardController` | Aggregated stats for admin UI |
+| `AuditLogController` | Query/stream audit events |
+| `ClientController` | Client CRUD (admin view) |
+| `ClientProfileController` | Authenticated client self-profile |
+| `ClientDocumentController` | Client-scoped document operations |
+| `DealmakerController` | Dealmaker user management |
+| `LegalPractitionerController` | Legal practitioner management |
+| `DocumentController` | Upload, list, fetch, update documents |
+| `LawRuleController` | Manage law rules used in compliance checks |
+| `ReportController` | Generate / retrieve summary reports |
+| `HealthController` | `/health` endpoint (used by Render) |
+| `TestUploadController` | Diagnostic upload endpoint |
+
+### Services (`service/`)
+| Service | Responsibility |
+|---|---|
+| `AdminClientService` / `AdminDashboardService` / `AdminReportService` | Admin-side aggregations |
+| `AuditLogService` + `AuditWebSocketService` | Audit logging + STOMP push |
+| `ClientService` / `ClientServiceINT` | Client domain logic + interface |
+| `DealMakerService` / `LegalPractitionerService` | Per-role user services |
+| `DocumentService` | Upload pipeline, persistence, retrieval |
+| `FirebaseStorageService` | Wraps Firebase Admin SDK for file storage |
+| `TextExtractionService` | Extracts text from PDF/DOCX (PDFBox + POI) |
+| `RuleExtractionService` | Sends documents to Groq / Python service for rule extraction |
+| `RuleSeederService` + `seed/ActRuleSeeder` | Seeds baseline legal rules at startup |
+| `LawRuleService` | CRUD for law rules |
+| `SummaryReportService` | Builds compliance summary reports (OpenPDF) |
+
+### Data Layer
+- **`entities/`** — JPA entities: `Admin`, `Client`, `DealMaker`, `LegalPractitioner`, `Document`, `DocumentContent`, `FileMetadata`, `Act`, `Clause`, `LawRul`, `AuditLog`, `SummaryReport`.
+- **`repo/`** — Spring Data repositories matching each entity.
+- **`projections/`** — Interface-based projections for efficient dashboard reads (`DashboardStats`, `MonthlyCount`, `RiskStat`, `TopUploader`, etc.).
+- **`queries/`** — Centralised JPQL/native query string constants per domain.
+- **`dto/`** — Request/response payloads (kept separate from entities).
+- **`enums/`** — `Role`, `RiskLevel`, `RiskFlag`, `ComplianceStatus`, `AnalysisStatus`, `DocumentStat`, `IngestionSource`, `ActionType`.
+
+### Security (`security/`)
+- `JwtUtil` — token generation, parsing, validation (HMAC, secret from `ALIS_JWT_SECRET`).
+- `JwtAuthenticationFilter` — extracts/validates JWT per request and populates the Spring `SecurityContext`.
+
+### Real-time (`webSocket/`)
+- `WebSocketConfig` — registers STOMP endpoints (used by `AuditWebSocketService` for live audit-log streaming).
+
+### Utilities (`utils/`)
+- `FileNameGenerator` — produces unique storage names.
+- `FilenameSanitizer` — strips unsafe characters from uploads.
+
+### Tests (`src/test/...`)
+- `DemoApplicationTests` — Spring context smoke test.
+- `JwtUtilTests` — token sign/verify edge cases.
+- `AdminClientServiceTests`, `ClientServiceTests`, `SummaryReportServiceTests`.
+
+---
+
+## Getting Started
+
+### Prerequisites
+- **Java 21**
+- **Maven 3.9+** (or use the bundled `./mvnw`)
+- **PostgreSQL 14+** (or use Supabase) — or H2 for quick start
+- **Firebase project** with a service account JSON + Storage bucket
+- **Groq API key** (optional — required for AI rule extraction)
+
+### Clone
+```bash
+git clone https://github.com/Lungaowen/ALIS_BACKEND.git
+cd ALIS_BACKEND
 ```
 
-### Login
-
-```json
-POST /api/auth/login
-{
-  "email": "legal@example.com",
-  "password": "LegalPass!2026"
-}
-```
-
-### Update own profile
-
-```json
-PUT /api/client/profile
-{
-  "fullName": "Lebo Practitioner Updated",
-  "username": "lebo_updated",
-  "currentPassword": "LegalPass!2026",
-  "newPassword": "LegalPass!2026#Updated"
-}
-```
-
-### Create a rule
-
-```json
-POST /api/rules
-{
-  "actId": 1,
-  "keyword": "cooling-off period",
-  "requirements": "The agreement must clearly disclose the cooling-off period.",
-  "riskLevel": "MEDIUM",
-  "suggestion": "Add a dedicated cooling-off clause."
-}
-```
+---
 
 ## Environment Variables
 
-Required for boot:
+Create a `config/.env` (used by docker-compose) or export in your shell.
 
-- `DB_URL`
-- `DB_USERNAME`
-- `DB_PASSWORD`
-- `ALIS_JWT_SECRET`
-- `FIREBASE_BUCKET_NAME`
+| Variable | Required | Description |
+|---|---|---|
+| `DB_URL` | ✅ | JDBC URL, e.g. `jdbc:postgresql://host:5432/alis` |
+| `DB_USERNAME` | ✅ | DB user |
+| `DB_PASSWORD` | ✅ | DB password |
+| `ALIS_JWT_SECRET` | ✅ | HMAC secret for signing JWTs (long random string) |
+| `ALIS_JWT_EXPIRATION` |  | Token TTL in ms (default `86400000` = 24h) |
+| `SUPABASE_JWT_SECRET` | ✅ | Used to validate Supabase-issued tokens |
+| `FIREBASE_BUCKET_NAME` | ✅ | Firebase Storage bucket name |
+| `FIREBASE_SERVICE_ACCOUNT` |  | Full service-account JSON (string), or mount file |
+| `GROQ_API_KEY` |  | Groq API key for AI features |
+| `GROQ_MODEL` |  | Default `llama-3.3-70b-versatile` |
+| `GROQ_API_URL` |  | Default Groq OpenAI-compatible endpoint |
+| `ALIS_PYTHON_SERVICE_API_URL` |  | External Python rule-extraction service |
+| `ALIS_SEED_ADMIN_NAME/EMAIL/PASSWORD` |  | Bootstrap admin user on first run |
+| `ALIS_CORS_ALLOWED_ORIGIN_PATTERNS` |  | Comma-separated origins (default `*`) |
+| `PORT` |  | HTTP port (default `8080`) |
+| `SPRING_PROFILES_ACTIVE` |  | `dev` \| `prod` \| `test` |
 
-Optional but strongly recommended:
+---
 
-- `FIREBASE_SERVICE_ACCOUNT`
-- `GROQ_API_KEY`
-- `GROQ_MODEL` (defaults to `llama-3.3-70b-versatile`)
-- `GROQ_API_URL` (defaults to Groq's OpenAI-compatible chat completions endpoint)
-- `ALIS_SEED_ADMIN_EMAIL`
-- `ALIS_SEED_ADMIN_PASSWORD`
-- `ALIS_SEED_ADMIN_NAME`
-- `ALIS_CORS_ALLOWED_ORIGIN_PATTERNS`
-- `ALIS_JWT_EXPIRATION`
-- `DDL_MODE`
-- `JPA_SHOW_SQL`
-- `PORT`
+## Running Locally
 
-## Local Run
-
-### 1. Run tests
-
+### Dev profile (verbose logs, Swagger on, Hibernate `update`)
 ```bash
-mvn test
+SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
 ```
 
-### 2. Start the app
+App boots at `http://localhost:8080` and Swagger UI is at `http://localhost:8080/swagger-ui.html`.
 
+### Build a runnable JAR
 ```bash
-mvn spring-boot:run
-```
-
-### 3. Or run the packaged jar
-
-```bash
-mvn -DskipTests package
+./mvnw clean package -DskipTests
 java -jar target/demo-0.0.1-SNAPSHOT.jar
 ```
 
-## Render Deployment
+---
 
-The project includes a Dockerfile and is suitable for Render deployment.
+## Docker & Deployment
 
-Recommended Render env vars:
+### Local with docker-compose
+```bash
+# Place Firebase JSON at ./config/firebase-service-account.json
+# Place env vars in ./config/.env
+docker compose up --build
+```
 
-- `DB_URL`
-- `DB_USERNAME`
-- `DB_PASSWORD`
-- `ALIS_JWT_SECRET`
-- `FIREBASE_BUCKET_NAME`
-- `FIREBASE_SERVICE_ACCOUNT` or `/etc/secrets/firebase.json`
+### Render (production)
+The repo ships with `src/main/resources/render.yaml`. Create a new Render service from the repo; set the `sync: false` secrets in the Render dashboard:
+
+- `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`
+- `FIREBASE_SERVICE_ACCOUNT`, `FIREBASE_BUCKET_NAME`
 - `GROQ_API_KEY`
-- `GROQ_MODEL` (optional)
-- `GROQ_API_URL` (optional)
-- `ALIS_SEED_ADMIN_EMAIL`
-- `ALIS_SEED_ADMIN_PASSWORD`
-- `ALIS_SEED_ADMIN_NAME`
-- `PORT`
+- `ALIS_JWT_SECRET`
+- `ALIS_SEED_ADMIN_EMAIL`, `ALIS_SEED_ADMIN_PASSWORD`
+- `ALIS_CORS_ALLOWED_ORIGIN_PATTERNS` (set to your real frontend URL — do **not** leave `*` in production)
 
-Recommended health check path:
+Render injects `PORT` automatically; the health check uses `/health`.
 
-- `/health`
+---
 
-## Notes and Current Limits
+## API Documentation
 
-- Swagger is admin-protected by the current security config.
-- Admin login returns the ID in the `clientId` field for compatibility with the existing response DTO.
-- There is no public `GET /api/acts` endpoint yet.
-- Password change exists for client roles through `/api/client/profile`.
-- There is still no dedicated admin password-change endpoint.
+- **OpenAPI JSON:** `alis-api.json` (committed to the repo)
+- **Swagger UI (dev only):** `http://localhost:8080/swagger-ui.html`
+- **Frontend integration guide:** `LOVABLE_API_BRIEF.md`
+- **JS client wrapper:** `frontend-api/alisApi.js`
 
-## Verification Status
+In production (`prod` profile) Swagger is disabled by default.
 
-The codebase currently passes the automated test suite with:
+---
 
-- `mvn test`
+## Testing
 
-Recent verified backend changes include:
+```bash
+./mvnw test
+```
 
-- role-based public registration
-- user self-service profile update
-- password change for client roles
-- safer admin client deletion
+Test profile (`application-test.properties`) uses H2 in-memory.
+
+---
+
+## Security Notes
+
+- JWT secret **must** be a high-entropy random string; never commit it.
+- Tighten `ALIS_CORS_ALLOWED_ORIGIN_PATTERNS` to your real frontend domain(s) before going public.
+- `spring.jpa.hibernate.ddl-auto` is `update` in dev and `validate`-friendly in prod — use Flyway/Liquibase if you need versioned migrations.
+- Firebase service-account JSON is highly sensitive — prefer Render Secret Files or env injection over committing the file.
+- `logging.level.org.springframework.security=DEBUG` in base config — consider lowering to `INFO`/`WARN` in production.
+
+---
+
+## License
+
+No license file is present in the repository at the time of this scan. Add a `LICENSE` file (e.g. MIT, Apache-2.0) to clarify usage rights.
+
+---
+
+*Generated by scanning every file in the repository: 140 files across controllers, services, entities, DTOs, projections, queries, security, WebSocket, utilities, tests, deployment manifests, and frontend helpers.*
